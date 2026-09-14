@@ -230,11 +230,41 @@ class ReviewCoordinator:
         findings = self.gemini_service.parse_findings(accumulated_text)
 
         # 7. Emit individual structured findings & repro specs
+        from app.sandbox.synthesizer import ReproSynthesizer
+        from app.sandbox.runner import EphemeralSandboxRunner
+
         for finding in findings:
             # Set audit metadata from context
             finding.audit_metadata.dlp_status = context.dlp_result.dlp_status
             finding.audit_metadata.redacted_entities = context.dlp_result.redacted_info_types
             finding.audit_metadata.latency_ms = round((time.perf_counter() - stream_start) * 1000.0, 2)
+
+            # Synthesize repro script if missing for critical/high findings
+            if not finding.sandboxed_repro_script:
+                script_content, exp_fail = ReproSynthesizer.synthesize_repro(
+                    category=finding.category.value,
+                    file_path=finding.file_path
+                )
+                from app.ai.models import SandboxedReproScript
+                finding.sandboxed_repro_script = SandboxedReproScript(
+                    runtime="python:3.11-slim",
+                    test_framework="pytest",
+                    script_content=script_content,
+                    expected_failure=exp_fail
+                )
+
+            # Synthesize patch diff if missing
+            if not finding.suggested_patch:
+                patch_diff = ReproSynthesizer.synthesize_patch_diff(
+                    category=finding.category.value,
+                    file_path=finding.file_path
+                )
+                from app.ai.models import SuggestedPatch
+                finding.suggested_patch = SuggestedPatch(
+                    diff=patch_diff,
+                    explanation=f"Automated one-click patch remediating {finding.category.value}",
+                    automated_verification_status="PENDING"
+                )
 
             yield format_sse_event("finding", finding.model_dump())
 
@@ -244,6 +274,7 @@ class ReviewCoordinator:
                     "repro_script": finding.sandboxed_repro_script.model_dump() if finding.sandboxed_repro_script else None,
                     "suggested_patch": finding.suggested_patch.model_dump() if finding.suggested_patch else None
                 })
+
 
         # 8. Emit final complete event
         total_latency_ms = round((time.perf_counter() - stream_start) * 1000.0, 2)
