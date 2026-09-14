@@ -1,0 +1,22 @@
+# FinGuard: FinTech Verifiable Code Review Engine
+# AIM Code Kitchen S01 - Track 1
+
+# Core Web API & Streaming
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+pydantic>=2.6.0
+python-multipart>=0.0.9
+
+# Google Cloud Platform & Vertex AI
+google-cloud-aiplatform>=1.38.0
+google-cloud-dlp>=3.15.0
+
+# Database & Vectors
+psycopg2-binary>=2.9.9
+sqlalchemy>=2.0.28
+pgvector>=0.2.5
+
+# Testing & Quality
+pytest>=7.4.4
+anyio>=3.7.1
+httpx>=0.27.0

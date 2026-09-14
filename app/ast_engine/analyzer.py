@@ -173,3 +173,8 @@ class ASTAnalyzer:
 
         # Return original error result
         return result
+
+
+# Convenience alias for diff-specific workflows
+DiffAnalyzer = ASTAnalyzer
+
