@@ -10,14 +10,23 @@
 
 ## 1. Executive Vision & Architectural Tenets
 
-### 1.1 The Objective
-Build, verify, publish, and benchmark a **locally-installed Python CLI package** (`pip install finguard`) that:
-1. Reduces code review cycle time from **48 hours to <30 seconds** running entirely on the developer's machine.
-2. Prevents double-spend, race conditions, floating-point currency errors, and unhandled idempotency keys with **verifiable repro tests**.
-3. **Never sends raw source code off-device.** Only DLP-sanitized diffs reach the developer's own Vertex AI endpoint.
-4. Conserves the **300 GCP credit points sandbox** budget by eliminating redundant LLM calls through local AST pre-screening.
-5. Maintains an immutable **SOC2 / PCI-DSS compliant ACID audit trail** in local SQLite (or team-owned Cloud SQL).
-6. Continuously learns from post-deploy CI flakiness and developer feedback via Bayesian rule reweighting.
+### 1.1 The Objective & Hybrid Enterprise Architecture
+
+FinGuard implements a **Hybrid Client-Cloud Architecture** specifically designed to satisfy enterprise zero-trust requirements while fulfilling **AIM Code Kitchen S01 GCP Hackathon Deliverable #1 ("Working Project URL hosted on Cloud Run")**:
+
+1. **Client Tier (Local Machine / CI):**
+   * Installed via `pip install finguard` (or local git hook).
+   * Executes **Tier 0 AST analysis ($0 / <15ms)** and client-side pre-scrubbing.
+   * Developers run `finguard review --cloud` (pointing to the team's Cloud Run deployment) or `finguard review --local` (offline SQLite fallback).
+   * **Zero-Trust Privacy:** Secrets, keys, and raw credentials are scrubbed locally before any payload is dispatched over HTTPS.
+
+2. **Cloud Tier (Google Cloud Platform — Live Evaluator URL):**
+   * **Hosted Cloud Run Service:** Serves the live production Web Console dashboard (`https://finguard-xyz.a.run.app`) — **satisfies Hackathon Deliverable #1**.
+   * **Cloud DLP API:** Performs deep compliance scans (`CREDIT_CARD_NUMBER`, `INDIA_PAN`, `IBAN_CODE`, `AUTH_TOKEN`) adhering to PCI-DSS / SOC2.
+   * **Cloud SQL PostgreSQL 16 + pgvector:** Hosts multi-tenant institutional memory, ACID audit logs, and HNSW vector embeddings of PR post-mortems.
+   * **Vertex AI (`gemini-1.5-flash-001`):** Streams transactional reasoning and deterministic repro tests via Server-Sent Events (SSE).
+   * **Sandbox Container Runner:** Executes ephemeral test containers on Cloud Run to verify fixes (Red $\to$ Green).
+   * **GCP Credit Utilization:** Consumes the allocated 300 Google Cloud credit points legitimately across Vertex AI, Cloud Run, Cloud SQL, and Cloud DLP.
 
 ### 1.2 Master System Flow
 
@@ -77,10 +86,10 @@ The master architecture is divided into 7 modular, independently testable slave 
 | **SUB-01** | Token-Free AST Engine & Static Linters | `AGENT-AST-PERF` | [`plans/subplans/01_ast_engine_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/01_ast_engine_plan.md) |
 | **SUB-02** | Local DLP Regex (primary) + Cloud DLP (optional enterprise) | `AGENT-SEC-DLP` | [`plans/subplans/02_security_dlp_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/02_security_dlp_plan.md) |
 | **SUB-03** | Local SQLite (default) + Cloud SQL pgvector (optional enterprise) | `AGENT-SQL-VEC` | [`plans/subplans/03_cloudsql_pgvector_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/03_cloudsql_pgvector_plan.md) |
-| **SUB-04** | Vertex AI Gemini 1.5 Flash SSE — called from dev's machine with dev's credentials | `AGENT-AI-STREAM` | [`plans/subplans/04_gemini_sse_stream_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/04_gemini_sse_stream_plan.md) |
-| **SUB-05** | Sandboxed Repro QA & Patch Generator | `AGENT-REPRO-QA` | [`plans/subplans/05_sandboxed_repro_qa_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/05_sandboxed_repro_qa_plan.md) |
+| **SUB-04** | Vertex AI Gemini 1.5 Flash SSE (Cloud Run Workload Identity + Local ADC fallback) | `AGENT-AI-STREAM` | [`plans/subplans/04_gemini_sse_stream_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/04_gemini_sse_stream_plan.md) |
+| **SUB-05** | Sandboxed Repro QA & Patch Generator (Cloud Run Jobs + Local Docker) | `AGENT-REPRO-QA` | [`plans/subplans/05_sandboxed_repro_qa_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/05_sandboxed_repro_qa_plan.md) |
 | **SUB-06** | Telemetry Ingestion & Dynamic Weighting | `AGENT-RETRO-LEARN` | [`plans/subplans/06_telemetry_retro_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/06_telemetry_retro_plan.md) |
-| **SUB-07** | Parallel SSE Consumer — Web Console at `localhost:7432` | `AGENT-ORCHESTRATOR` | [`plans/subplans/07_web_console_dashboard_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/07_web_console_dashboard_plan.md) |
+| **SUB-07** | Parallel SSE Consumer — Web Console (Cloud Run Hosted URL + Localhost) | `AGENT-ORCHESTRATOR` | [`plans/subplans/07_web_console_dashboard_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/07_web_console_dashboard_plan.md) |
 | **SUB-08** | **CLI Packaging & Local Distribution** (`pip install finguard`) | `AGENT-ORCHESTRATOR` | [`plans/subplans/08_cli_packaging_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/08_cli_packaging_plan.md) |
 
 ---

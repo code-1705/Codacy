@@ -8,7 +8,11 @@
 
 Provide real-time, low-latency streaming code audits over Server-Sent Events (SSE) using Google Vertex AI (`gemini-1.5-flash-001`), streaming structured JSON chunks adhering to the `FinGuardFinding` contract.
 
-> **Credential Ownership:** FinGuard makes Vertex AI API calls **from the developer's local machine** using **their own GCP credentials** (Application Default Credentials or service account). FinGuard has no shared backend, no proxy, and no API key of its own. Every team's Gemini calls hit their own project and their own billing account. Only the **DLP-sanitized diff** (never raw source) is transmitted.
+> **Hybrid Execution & Credential Governance:**
+> FinGuard operates with dual execution paths for Gemini 1.5 Flash:
+> 1. **Cloud Run Gateway (Team Deployment / Deliverable #1):** The CLI forwards the DLP-sanitized diff to the organization's dedicated Cloud Run service. Cloud Run securely invokes Vertex AI using GCP **Workload Identity** (no long-lived service account keys stored on developer workstations).
+> 2. **Local CLI Mode (Offline / Standalone Developer):** When running locally without Cloud Run, FinGuard invokes Vertex AI directly using the developer's local Application Default Credentials (`gcloud auth application-default login`).
+> In both modes, **only the DLP-sanitized diff** (never un-sanitized source code or credentials) is transmitted to Vertex AI. Every team's Gemini calls hit their own GCP project and billing account.
 
 ## 2. Technical Architecture
 

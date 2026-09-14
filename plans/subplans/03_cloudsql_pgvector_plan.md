@@ -6,27 +6,24 @@
 
 ## 1. Objectives & Scope
 
-Provide a local-first, zero-infrastructure memory and audit layer for FinGuard. By default everything is stored in a local **SQLite** database inside the developer's `.finguard/` folder. For enterprise teams, this layer can optionally be upgraded to **Google Cloud SQL for PostgreSQL 16** with `pgvector` for shared institutional memory across a team.
-
-> **Architecture Shift:** There is no mandatory cloud database. A solo developer or a team trialling FinGuard should get full functionality — audit logs, vector search, rule weights — from a single local file.
+Provide a dual-mode ACID audit and semantic memory layer for FinGuard. 
+* **In Production Cloud Run (Hackathon Deployment):** Uses **Google Cloud SQL for PostgreSQL 16** with `pgvector` (`text-embedding-004`), providing scalable HNSW vector similarity search across historical incidents, satisfying GCP hackathon technical mandates and consuming allocated credits.
+* **In Local / Offline CLI Mode:** Uses a local **SQLite** database (`.finguard/memory.db`) with in-process vector cosine distance calculation, ensuring developers can run disconnected without mandatory cloud infrastructure.
 
 ## 2. Technical Architecture
 
-### 2.1 Two-Backend Storage Model
+### 2.1 Dual-Backend Storage Model
 
-**Tier A — Local SQLite (DEFAULT)**
-* Zero cloud dependency. Works immediately after `finguard init`.
-* File: `.finguard/memory.db` (added to `.gitignore` automatically).
-* Uses `sqlite-vec` extension for approximate vector similarity search (cosine).
-* Tables: `review_sessions`, `historical_pr_incidents`, `review_rules` (same schema, SQLite dialect).
-* Suitable for individual developers and small teams.
+**Tier A — Cloud SQL PostgreSQL 16 + pgvector (PRIMARY CLOUD RUN BACKEND)**
+* Provisioned in Google Cloud for the hosted Cloud Run review service.
+* Full `pgvector` HNSW index (`USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64)`) for sub-25ms nearest-neighbor precedent retrieval.
+* Multi-tenant ACID audit logs (`audit_sessions`) and persistent Bayesian rule weights (`review_rules`).
+* Utilizes GCP Sandbox credits for managed database and Vertex embedding generation.
 
-**Tier B — Cloud SQL PostgreSQL 16 + pgvector (OPTIONAL ENTERPRISE)**
-* Enabled via `.finguard/config.yaml`: `database.backend: cloudsql`.
-* Shared institutional memory across the entire engineering team.
-* Full `pgvector` HNSW index (`USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64)`) for sub-25ms nearest-neighbor search.
-* Tables: `review_sessions`, `historical_pr_incidents`, `review_rules`.
-* Teams bring their own Cloud SQL instance — FinGuard never hosts a shared database.
+**Tier B — Local SQLite (OFFLINE / DEV ADAPTER)**
+* Fallback when running `finguard review --local` or testing in CI without GCP credentials.
+* File: `.finguard/memory.db` (git-ignored).
+* Schema-compatible with PostgreSQL tables; uses Python-side / numpy cosine similarity for vector matching.
 
 ### 2.2 Shared Schema (Both Backends)
 1. **`review_sessions`:** Append-only ACID log recording timestamp, commit SHA, PR identifier, author, DLP status, findings count, and SHA-256 integrity hash.

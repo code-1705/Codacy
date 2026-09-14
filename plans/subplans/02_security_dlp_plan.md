@@ -8,16 +8,18 @@
 
 Prevent PII, credentials, PCI-DSS card data, and malicious prompt injections from reaching Vertex AI or leaking into audit logs.
 
-> **Architecture Shift (Privacy-First CLI Model):**
-> FinGuard runs locally. There is no shared cloud endpoint. The DLP engine is the **last gate on the developer's machine** before any bytes are transmitted to Vertex AI. The local regex scrubber is the **primary and always-active** engine. Cloud DLP is an **optional enterprise addon** for teams that want full InfoType coverage and compliance receipts.
+> **Hybrid Privacy & GCP Compliance Model:**
+> FinGuard employs a **Dual-Layer DLP Engine**:
+> 1. **Client-Side (Local CLI):** The local regex scrubber is always active on the developer's workstation, ensuring no raw credentials or PAN ever cross the wire unredacted.
+> 2. **Cloud Tier (Cloud Run Service):** The production service utilizes the **Google Cloud DLP API** (`google-cloud-dlp`) to execute rigorous PCI-DSS and SOC2 infoType inspection (`CREDIT_CARD_NUMBER`, `INDIA_PAN`, `IBAN_CODE`, `AUTH_TOKEN`), certifying review artifacts and consuming GCP sandbox resources compliantly.
 
 ## 2. Technical Architecture
 
 ### 2.1 Two-Tier DLP Architecture
 
-**Tier A — Local Regex Scrubber (ALWAYS ACTIVE, PRIMARY)**
-* Runs 100% offline in <2ms on the developer's machine.
-* Zero network calls. Zero billing. Always-on.
+**Tier A — Local Regex Scrubber (CLIENT-SIDE, ALWAYS ACTIVE)**
+* Runs 100% offline in <2ms on the developer's machine inside the CLI / Git Hook.
+* Zero network calls. Always-on pre-flight redaction.
 * Regex + entropy patterns covering:
   * Credit card numbers (Luhn-validated pattern)
   * Private keys (`-----BEGIN RSA PRIVATE KEY-----`, etc.)
@@ -27,13 +29,12 @@ Prevent PII, credentials, PCI-DSS card data, and malicious prompt injections fro
   * India PAN (`[A-Z]{5}[0-9]{4}[A-Z]`)
   * IBAN patterns
 * Redaction token: `[REDACTED_BY_FINGUARD_LOCAL_DLP]`.
-* **Fail-Closed:** If local scrubber itself errors, the review is aborted. Code never proceeds to Vertex AI.
+* **Fail-Closed:** If local scrubber itself errors, the review is aborted. Code never proceeds.
 
-**Tier B — Google Cloud DLP API (OPTIONAL ENTERPRISE ADDON)**
-* Enabled via `.finguard/config.yaml`: `dlp.backend: cloud_dlp`.
-* Provides full infoType coverage, compliance receipts, and DPDP audit export.
-* Still runs on the sanitized output of Tier A — Belt AND suspenders.
-* Disabled by default. Teams with PCI-DSS Level 1 requirements enable this.
+**Tier B — Google Cloud DLP API (CLOUD RUN BACKEND)**
+* Deployed on the Cloud Run production service using `google-cloud-dlp`.
+* Scans ingested diffs against institutional infoTypes, generating verifiable compliance receipts and cryptographic SHA-256 audit hashes for SOC2/PCI-DSS logs.
+* Runs on sanitized streams, validating zero-leakage before Vertex AI prompt construction.
 
 ### 2.2 Adversarial Prompt Injection Quarantine
 * Inspects developer code comments and commit messages for adversarial jailbreak phrases:

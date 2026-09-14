@@ -6,7 +6,9 @@
 
 ## 1. Objectives & Scope
 
-Provide a stunning, responsive, dark-mode web console accessible at **`http://localhost:7432`** — launched by `finguard dashboard` or automatically opened by `finguard review --ui`. The console is a static web app served by the local FastAPI process. There is no hosted deployment. Every developer gets their own private instance on their own machine.
+Provide a stunning, responsive, dark-mode web console that satisfies **AIM Code Kitchen Deliverable #1 ("Working Project URL hosted on Cloud Run")** while also running locally via the CLI (`finguard dashboard` / `finguard review --ui`).
+* **Live Evaluator URL (Cloud Run):** Hosted on Google Cloud Run (`https://finguard-xyz.a.run.app`), giving hackathon judges and enterprise security teams an immediate, interactive web console to trigger preset financial vulnerability reviews and view live SSE streams.
+* **Local Developer Console:** Served by FastAPI locally on `http://localhost:7432` when working disconnected.
 
 ## 2. Technical Architecture & UX Design System
 

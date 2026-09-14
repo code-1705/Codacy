@@ -9,6 +9,11 @@
 
 Intercept code diffs at wire speed (0ms–15ms) using Python's native `ast` module to detect deterministic FinTech violations with 100% precision and zero LLM cost.
 
+> **Dual Hybrid Execution Topology:**
+> The AST Engine operates identically in two environments:
+> 1. **Client-Side (Local CLI / Git Hook):** Runs instantly on the developer's laptop (`finguard review` or pre-commit hook). Halts immediately if syntax is broken or critical violations exist, saving developer time and network bandwidth.
+> 2. **Server-Side (Cloud Run Ingestion Gateway):** Runs as the wire-speed pre-flight gate inside the Cloud Run FastAPI service when reviews arrive via GitHub webhook or the hosted Web Console. Protects the GCP Vertex AI quota and 300 sandbox credit points from being wasted on syntax errors or deterministic anti-patterns.
+
 ## 2. Technical Architecture & Rule Specifications
 
 ### 2.1 Rule Set Definitions

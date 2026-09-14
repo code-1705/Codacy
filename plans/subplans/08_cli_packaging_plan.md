@@ -6,9 +6,9 @@
 
 ## 1. Objectives & Scope
 
-Distribute FinGuard as a **locally-installed Python CLI package** — like Semgrep, ESLint, or Bandit. Developers install it once via `pip`, run it on their own machine, and their source code **never leaves their network**. They supply their own GCP credentials; FinGuard calls their Vertex AI endpoint on their behalf with their billing account.
+Distribute FinGuard as a **locally-installed Python CLI package** (`pip install finguard`) backed by an organization's private **Google Cloud Run review gateway** (satisfying Hackathon Deliverable #1). Developers run commands on their workstations (`git diff`), run deterministic AST checks locally with zero tokens, scrub PII and secrets via DLP, and stream findings either from their team's private Cloud Run service (using GCP Workload Identity) or locally via Application Default Credentials.
 
-> **Core Privacy Guarantee:** FinGuard never operates a shared cloud endpoint. Every team runs their own isolated instance. Code stays on-premises.
+> **Core Privacy & Compliance Guarantee:** FinGuard operates zero public multi-tenant SaaS servers. Every organization deploys its own private Cloud Run gateway and Cloud SQL instance in its own Google Cloud project. Raw un-scrubbed repository source code stays on developer machines; only sanitized diffs are reviewed.
 
 ---
 
@@ -35,7 +35,9 @@ finguard init
 # → Writes config to .finguard/config.yaml in the repo
 
 # Core review commands
-finguard review                      # Reviews current `git diff HEAD`
+finguard review                      # Reviews current `git diff HEAD` (via Cloud Run or local)
+finguard review --cloud              # Explicitly routes via team Cloud Run service (default in team setup)
+finguard review --local              # 100% offline mode (local AST + SQLite, no GCP network calls)
 finguard review --staged             # Reviews `git diff --staged` (pre-commit)
 finguard review --file payment.py    # Reviews a single file
 finguard review --diff patch.diff    # Reviews an existing diff file
@@ -44,6 +46,7 @@ finguard review --severity critical  # Only surface CRITICAL findings
 # Output modes
 finguard review                      # Default: rich terminal output
 finguard review --json               # Output raw FinGuardFinding JSON (for CI)
+finguard review --ui                 # Launches interactive web console at localhost:7432
 finguard review --no-ui              # Suppress web dashboard, print to stdout only
 
 # Git hook management
@@ -77,24 +80,33 @@ fi
 
 ---
 
-## 3. Local Server Architecture
+## 3. Review Routing & Server Architecture
 
-`finguard review` and `finguard dashboard` both lazily spin up a local FastAPI process:
+FinGuard CLI intelligently routes reviews according to the configured execution mode:
 
 ```
 finguard review
        │
-       ├─ Check if localhost:7432 is running
-       │    ├─ Yes → POST diff directly to existing server
-       │    └─ No  → Spawn uvicorn as a background subprocess on port 7432
-       │              then POST diff to it
+       ├─ Mode Determination:
+       │    ├─ Cloud Run Mode (Default when `cloud_run_url` configured or `--cloud` flag):
+       │    │    ├─ 1. Run local AST Gatekeeper (Tier 0, 0ms, 0 tokens)
+       │    │    ├─ 2. Run local DLP Scrubbing (Tier 1 pre-flight on diff)
+       │    │    ├─ 3. POST sanitized diff to {cloud_run_url}/api/v1/review/start
+       │    │    ├─ 4. Stream SSE from {cloud_run_url}/api/v1/review/stream/{session_id}
+       │    │    └─ 5. Cloud Run uses Workload Identity (no workstation credentials)
+       │    │
+       │    └─ Local Mode (`mode: local` or `--local` flag):
+       │         ├─ 1. Check if localhost:7432 is running (spawn uvicorn if not)
+       │         ├─ 2. POST diff to http://localhost:7432/api/v1/review/start
+       │         ├─ 3. Stream SSE from http://localhost:7432/api/v1/review/stream/{session_id}
+       │         └─ 4. Uses local SQLite memory + developer's gcloud ADC
        │
-       ├─ Wait for SSE stream on GET /api/v1/review/stream/{session_id}
-       └─ Render findings in terminal (Rich) or open browser (--ui flag)
+       └─ Output: Render Rich CLI terminal UI or open browser (--ui flag)
 ```
 
-* Server process is **ephemeral by default**: exits when `finguard` CLI exits.
-* Use `finguard dashboard` to keep the server alive persistently for team use.
+* Cloud Run mode centralizes audit logs in team Cloud SQL and prevents credentials from residing on workstations.
+* Local mode allows complete disconnected operation or offline debugging.
+* In local mode, the uvicorn process is **ephemeral by default** (terminates when the CLI exits) unless started via `finguard dashboard`.
 
 ---
 
@@ -104,13 +116,17 @@ finguard review
 Committed to the repo root (secrets excluded via `.gitignore`):
 ```yaml
 version: "1.0"
+mode: "cloud"                          # "cloud" (team Cloud Run gateway) or "local" (standalone offline)
+cloud_run_url: "https://finguard-backend-xyz.a.run.app" # Production Cloud Run Service URL (Deliverable #1)
+
+# GCP Project settings (used for Cloud Run deployment and local ADC fallback)
 project_id: "my-gcp-project"          # GCP project with Vertex AI enabled
 vertex_region: "us-central1"
 model: "gemini-1.5-flash-001"
 
-# Database (choose one):
+# Database (used by Cloud Run or local mode):
 database:
-  backend: "sqlite"                    # Default: local SQLite
+  backend: "sqlite"                    # "sqlite" for local, "cloudsql" for Cloud Run
   sqlite_path: ".finguard/memory.db"
   # OR:
   # backend: "cloudsql"
@@ -118,7 +134,7 @@ database:
 
 # DLP (choose one):
 dlp:
-  backend: "local"                     # Default: local regex scrubber
+  backend: "local"                     # Default: fast local regex scrubber
   # OR:
   # backend: "cloud_dlp"              # Optional: full Google Cloud DLP API
 
@@ -127,7 +143,7 @@ webhook_secret: ""                     # Populated by `finguard init`
 
 # Behaviour
 min_severity: "HIGH"                   # Only block commits at this level+
-port: 7432
+port: 7432                             # Local dashboard / ephemeral server port
 ```
 
 ### 4.2 Secrets (never committed)
@@ -194,11 +210,13 @@ finguard/
 
 ---
 
-## 7. Privacy Guarantee Summary
-| Data | Goes where | Who owns it |
+## 7. Privacy & Infrastructure Governance Summary
+| Component / Data | Destination & Execution | Ownership & Security Boundary |
 | :--- | :--- | :--- |
-| Raw source code | **Stays local** — never transmitted | Developer's machine |
-| DLP-scrubbed diff | Sent to **their own** Vertex AI endpoint | Their GCP project |
-| Findings & audit logs | Stored in **their** local SQLite or **their** Cloud SQL | Their infra |
-| Learning ledger | `.finguard/` folder in **their** repo | Their team |
-| FinGuard servers | **None — FinGuard has no backend** | N/A |
+| **Raw Repository Source Code** | **Never leaves developer's workstation** | Developer machine / local filesystem |
+| **AST Pre-Check (Tier 0)** | Local Python AST execution (0ms, 0 tokens) | Developer machine |
+| **Sanitized Code Diff (Tier 1)** | Transmitted to private Cloud Run gateway over TLS | Organization's private GCP Project VPC |
+| **AI Reasoning (Tier 3)** | Google Vertex AI (`gemini-1.5-flash-001`) via Workload Identity | Organization's GCP Project & Billing |
+| **Audit Logs & Embeddings (Tier 2)** | Organization's Cloud SQL (`pgvector`) or local SQLite | Organization's private database |
+| **Public Multi-Tenant SaaS** | **NONE** — FinGuard operates no external SaaS servers | Zero third-party data leakage |
+| **Production Cloud Run Service** | Dedicated Cloud Run deployment (Deliverable #1) | Hosted inside organization's GCP project |

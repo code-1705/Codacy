@@ -17,22 +17,21 @@ Transform subjective AI commentary into objective, verifiable evidence by synthe
 
 ### 2.2 Ephemeral Execution Runner
 
-> [!IMPORTANT FIX — NEW-03]
-> "Container **or** subprocess" was an unacceptable ambiguity. A plain subprocess is NOT isolated from the host filesystem — AI-generated repro code could read `.env`, write temp files, or enumerate directories. The execution hierarchy is now strictly ordered:
-
-**Tier A (Preferred): Ephemeral Container**
-* Spins up an isolated `python:3.11-slim` Docker container per review.
-* No network access (`--network none`), read-only host filesystem mount, and memory cap (`--memory 256m`).
-* Container is destroyed immediately after execution regardless of outcome.
-
-**Tier B (Fallback): `seccomp`-Restricted Subprocess**
-* Used only when container runtime is unavailable (e.g. restricted Cloud Run environment).
-* Enforces mandatory constraints:
-  * `seccomp` profile blocking `open()`, `write()`, `unlink()`, `socket()` syscalls.
-  * Execution timeout: max **4.0 seconds**.
-  * Memory cap: **256MB** via `resource.setrlimit`.
-  * Read-only working directory with `os.chroot()` or equivalent namespace isolation.
-* If neither Tier A nor Tier B can be satisfied, sandbox execution is **ABORTED** and the finding is returned without repro verification — marked `verification_status: UNVERIFIABLE`.
+> [!IMPORTANT FIX — NEW-03 & HYB-04]
+> "Container **or** subprocess" was an unacceptable ambiguity, and Cloud Run service instances cannot run nested Docker daemons. The sandboxed execution runner detects its execution context and applies strict multi-tier isolation:
+>
+> **Context 1: Cloud Run Hosted Gateway (Deliverable #1)**
+> * **Primary (Cloud Run Jobs API):** Triggers an ephemeral Google Cloud Run Job task with a specialized `finguard-repro-runner` container (`--network none`, 256MiB limit, 5s timeout).
+> * **Fallback (Cloud Run In-Process Restricted Runner):** If Cloud Run Jobs dispatch is disabled, runs within an isolated tempdir using resource limits (`resource.setrlimit(RLIMIT_CPU, 4)` and `RLIMIT_AS`), namespace isolation, and strict process termination.
+>
+> **Context 2: Local Developer CLI / CI Workstation**
+> * **Tier A (Preferred — Local Docker):** Spins up an ephemeral `python:3.11-slim` Docker container per review (`--network none`, read-only host mount, memory capped at 256MB). Destroyed immediately upon completion.
+> * **Tier B (Fallback — `seccomp`-Restricted Subprocess):** Used when Docker daemon is not running locally. Mandatory constraints:
+>   * `seccomp` profile / restricted syscall filter blocking `socket()`, `unlink()`, and unauthorized writes.
+>   * Execution timeout: max **4.0 seconds**.
+>   * Memory cap: **256MB** via `resource.setrlimit`.
+>   * Read-only isolated working directory.
+> * If neither Tier A nor Tier B can be satisfied, sandbox execution is **ABORTED** and marked `verification_status: UNVERIFIABLE`.
 
 **Verification Protocol (unchanged):**
 * Phase 1 (Proof of Bug): Runs repro test against original code → **MUST FAIL**.
