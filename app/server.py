@@ -164,3 +164,41 @@ async def list_rules():
 async def get_pilot_kpis():
     """Returns baseline, current, and stretch pilot KPIs."""
     return {"kpis": ledger_manager.get_kpis()}
+
+
+# --- 6. Historical CSV Learning & User Growth Endpoints (Track 1 Focus) ---
+
+class CSVIngestRequest(BaseModel):
+    csv_content: str
+
+
+@app.post("/api/v1/rules/ingest-csv")
+async def ingest_historical_csv_rules(req: CSVIngestRequest):
+    """
+    Ingests and vectorizes historical review data provided in schema: <id>, <type>, <description>.
+    Integrates historical rules directly into vector memory for grounding.
+    """
+    if not req.csv_content.strip():
+        raise HTTPException(status_code=400, detail="CSV content cannot be empty.")
+    result = db_manager.ingest_csv(req.csv_content)
+    return result
+
+
+@app.get("/api/v1/users/{user_id}/growth")
+async def get_user_growth(user_id: str):
+    """
+    Returns persistent development growth, historical quality score trajectory,
+    and optimization patterns tracked over time for the specified user.
+    """
+    growth_data = db_manager.get_user_growth(user_id)
+    return growth_data
+
+
+@app.get("/api/v1/languages")
+async def get_supported_languages():
+    """Returns supported languages and best-practice guidelines."""
+    from app.multilang import LANGUAGE_GUIDELINES
+    return {
+        "supported_languages": list(LANGUAGE_GUIDELINES.keys()),
+        "guidelines": {k: v.__dict__ for k, v in LANGUAGE_GUIDELINES.items()}
+    }

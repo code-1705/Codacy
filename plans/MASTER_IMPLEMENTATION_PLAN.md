@@ -91,6 +91,7 @@ The master architecture is divided into 7 modular, independently testable slave 
 | **SUB-06** | Telemetry Ingestion & Dynamic Weighting | `AGENT-RETRO-LEARN` | [`plans/subplans/06_telemetry_retro_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/06_telemetry_retro_plan.md) |
 | **SUB-07** | Parallel SSE Consumer — Web Console (Cloud Run Hosted URL + Localhost) | `AGENT-ORCHESTRATOR` | [`plans/subplans/07_web_console_dashboard_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/07_web_console_dashboard_plan.md) |
 | **SUB-08** | **CLI Packaging & Local Distribution** (`pip install finguard`) | `AGENT-ORCHESTRATOR` | [`plans/subplans/08_cli_packaging_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/08_cli_packaging_plan.md) |
+| **SUB-09** | **Multi-Language, 1–10 Quality Rating, CSV Ingestion & User Growth** | `AGENT-ORCHESTRATOR` | [`plans/subplans/09_multilang_quality_csv_growth_plan.md`](file:///c:/Users/Vansh/Desktop/codeKitchenHack/plans/subplans/09_multilang_quality_csv_growth_plan.md) |
 
 ---
 

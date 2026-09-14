@@ -56,22 +56,49 @@
         <textarea id="diffInput" class="diff-textarea" placeholder="Paste unified git diff here or select a demo preset above..." spellcheck="false"></textarea>
       </div>
 
-      <!-- PR Metadata -->
-      <div class="meta-grid">
+      <!-- Meta Grid: Language, Repo, User -->
+      <div class="meta-grid" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 12px;">
+        <div>
+          <label class="input-label" for="langSelect">Language:</label>
+          <select id="langSelect" class="text-input" style="background: rgba(15, 23, 42, 0.8);">
+            <option value="python">Python</option>
+            <option value="javascript">JavaScript</option>
+            <option value="typescript">TypeScript</option>
+            <option value="go">Go (Golang)</option>
+            <option value="java">Java</option>
+          </select>
+        </div>
         <div>
           <label class="input-label" for="repoInput">Repository:</label>
           <input type="text" id="repoInput" class="text-input" value="org/payments-engine">
         </div>
         <div>
-          <label class="input-label" for="authorInput">Author ID:</label>
-          <input type="text" id="authorInput" class="text-input" value="alice@fintech.corp">
+          <label class="input-label" for="userInput">User ID:</label>
+          <input type="text" id="userInput" class="text-input" value="alice_dev">
         </div>
       </div>
 
-      <!-- Launch Button -->
-      <button id="btnLaunchReview" class="btn-launch">
-        <span>🚀</span> Launch Intelligent Review
-      </button>
+      <!-- Action Buttons -->
+      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px;">
+        <button id="btnLaunchReview" class="btn-launch">
+          <span>🚀</span> Launch Review
+        </button>
+        <button id="btnOpenCsvModal" class="btn-preset" style="height: auto; border: 1px solid var(--accent-cyan); color: var(--accent-cyan);">
+          <span>📥</span> CSV Rules
+        </button>
+      </div>
+
+      <!-- CSV Ingestion Modal/Drawer (collapsible) -->
+      <div id="csvDrawer" style="display: none; margin-top: 14px; padding: 12px; background: rgba(15, 23, 42, 0.9); border: 1px solid var(--accent-cyan); border-radius: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 0.75rem; font-weight: 700; color: var(--accent-cyan);">HISTORICAL CSV INGESTION (&lt;id&gt;, &lt;type&gt;, &lt;description&gt;)</span>
+          <button id="btnCloseCsvModal" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer;">✕</button>
+        </div>
+        <textarea id="csvInputText" class="diff-textarea" style="height: 70px; font-size: 0.75rem;" placeholder="1, formatting, Avoid single-character variable names&#10;2, performance, Cache repeated database lookups&#10;3, security, Never interpolate raw input into SQL"></textarea>
+        <button id="btnIngestCsv" class="btn-preset" style="width: 100%; margin-top: 6px; background: rgba(6, 182, 212, 0.2); color: var(--accent-cyan);">
+          ⚡ Vectorize & Learn Rules
+        </button>
+      </div>
     </aside>
 
     <!-- Right Column: Real-time Multi-Tier Review HUD & SSE Stream -->
@@ -82,7 +109,7 @@
       </div>
 
       <!-- Multi-Tier Pipeline Metric Tiles -->
-      <div class="hud-metrics">
+      <div class="hud-metrics" style="grid-template-columns: repeat(5, 1fr);">
         <div class="hud-tile emerald">
           <div class="hud-label">Tier 0 AST Filter</div>
           <div class="hud-value" id="astMetrics">0 ms</div>
@@ -102,6 +129,11 @@
           <div class="hud-label">Tier 3 Vertex AI</div>
           <div class="hud-value" id="geminiTokens">0 ms</div>
           <div class="hud-sub" id="geminiModel">gemini-1.5-flash-001</div>
+        </div>
+        <div class="hud-tile" id="qualityTile" style="border: 1px solid var(--accent-emerald);">
+          <div class="hud-label" style="color: var(--accent-emerald);">Quality Rating</div>
+          <div class="hud-value" id="qualityScoreText" style="color: var(--accent-emerald);">10.0 / 10</div>
+          <div class="hud-sub" id="qualityGradeText">Grade A+ • Flawless</div>
         </div>
       </div>
 

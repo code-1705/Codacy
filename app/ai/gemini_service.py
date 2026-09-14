@@ -168,8 +168,8 @@ class GeminiStreamService:
         # Check prompt diff text directly for semantic issues if no AST findings
         diff_lower = prompt.lower()
         if not findings and (
-            ("balance" in diff_lower or "wallet" in diff_lower) and
-            ("withdrawal" in diff_lower or "debit" in diff_lower or "-=" in diff_lower) and
+            ("balance" in diff_lower or "wallet" in diff_lower or "account" in diff_lower) and
+            ("withdrawal" in diff_lower or "debit" in diff_lower or "-=" in diff_lower or "withdraw" in diff_lower) and
             "for update" not in diff_lower
         ):
             findings.append({

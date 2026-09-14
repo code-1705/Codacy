@@ -46,7 +46,9 @@ class ReviewSessionContext:
         ast_findings: List[Dict[str, Any]],
         historical_precedents: List[Dict[str, Any]],
         elevated_rules: List[str],
-        payload_hash: str
+        payload_hash: str,
+        user_id: str = "default_user",
+        language: str = "python"
     ):
         self.session_id = session_id
         self.repo = repo
@@ -59,6 +61,8 @@ class ReviewSessionContext:
         self.historical_precedents = historical_precedents
         self.elevated_rules = elevated_rules
         self.payload_hash = payload_hash
+        self.user_id = user_id
+        self.language = language
         self.created_at = time.time()
 
 
@@ -95,16 +99,21 @@ class ReviewCoordinator:
         dlp_result = self.dlp_service.inspect(request.diff)
         quarantine_reason = dlp_result.quarantine_reason if dlp_result.dlp_status == "QUARANTINED" else None
 
-        # 2. Tier 0: Token-Free AST Analysis on sanitized code
+        # 2. Determine Programming Language (auto-detect if not specified)
+        from app.multilang import detect_language
+        language = getattr(request, "language", None) or detect_language(request.diff)
+        user_id = getattr(request, "user_id", "default_user") or "default_user"
+
+        # 3. Tier 0: Token-Free AST Analysis on sanitized code (for Python)
         ast_findings_dicts = []
-        if not quarantine_reason:
+        if not quarantine_reason and language == "python":
             raw_ast_findings = self.ast_analyzer.analyze_diff(dlp_result.sanitized_content)
             ast_findings_dicts = raw_ast_findings.deterministic_findings
 
-        # 3. Payload integrity hash
+        # 4. Payload integrity hash
         payload_hash = dlp_result.integrity_hash
 
-        # 4. Tier 2: Retrieve matched historical PR incident precedents & elevated rules
+        # 5. Tier 2: Retrieve matched historical PR incident precedents & elevated rules
         matched_precedents_dicts = []
         elevated_rules = []
         if not quarantine_reason:
@@ -113,7 +122,11 @@ class ReviewCoordinator:
             matched_precedents_dicts = [p.to_dict() for p in vec_result.matched_precedents]
             elevated_rules = vec_result.elevated_rules
 
-        # 5. Build in-memory session context
+        # 6. Calculate initial quality rating from pre-flight findings
+        from app.scoring import calculate_quality_rating
+        initial_rating = calculate_quality_rating(ast_findings_dicts)
+
+        # 7. Build in-memory session context
         context = ReviewSessionContext(
             session_id=session_id,
             repo=request.repo,
@@ -125,11 +138,13 @@ class ReviewCoordinator:
             ast_findings=ast_findings_dicts,
             historical_precedents=matched_precedents_dicts,
             elevated_rules=elevated_rules,
-            payload_hash=payload_hash
+            payload_hash=payload_hash,
+            user_id=user_id,
+            language=language
         )
         self._active_sessions[session_id] = context
 
-        # 6. Log immutable ACID session record
+        # 8. Log immutable ACID session record
         duration_ms = int((time.perf_counter() - start_time) * 1000.0)
         session_record = ReviewSession(
             id=session_id,
@@ -140,7 +155,10 @@ class ReviewCoordinator:
             payload_hash=payload_hash,
             findings_count=len(ast_findings_dicts),
             dlp_status=dlp_result.dlp_status,
-            execution_duration_ms=duration_ms
+            execution_duration_ms=duration_ms,
+            quality_score=initial_rating.score,
+            user_id=user_id,
+            language=language
         )
         self.db_manager.log_session(session_record)
 
@@ -151,7 +169,10 @@ class ReviewCoordinator:
             commit_sha=request.commit_sha,
             dlp_status=dlp_result.dlp_status,
             redacted_count=dlp_result.redacted_findings_count,
-            ast_findings_count=len(ast_findings_dicts)
+            ast_findings_count=len(ast_findings_dicts),
+            quality_score=initial_rating.score,
+            quality_grade=initial_rating.grade,
+            language=language
         )
 
 
@@ -213,7 +234,8 @@ class ReviewCoordinator:
             historical_precedents=context.historical_precedents,
             elevated_rules=context.elevated_rules,
             repo_name=context.repo,
-            commit_sha=context.commit_sha
+            commit_sha=context.commit_sha,
+            language=getattr(context, "language", "python")
         )
 
         # 5. Stream tokens from Gemini 1.5 Flash
@@ -276,12 +298,19 @@ class ReviewCoordinator:
                 })
 
 
-        # 8. Emit final complete event
+        # 8. Emit final complete event with 1-10 quality rating
+        from app.scoring import calculate_quality_rating
+        final_rating = calculate_quality_rating([f.model_dump() for f in findings])
+
         total_latency_ms = round((time.perf_counter() - stream_start) * 1000.0, 2)
         yield format_sse_event("complete", {
             "session_id": context.session_id,
             "total_findings": len(findings),
             "status": "ANALYSIS_COMPLETE",
+            "quality_score": final_rating.score,
+            "quality_grade": final_rating.grade,
+            "quality_verdict": final_rating.verdict,
+            "language": getattr(context, "language", "python"),
             "total_latency_ms": total_latency_ms,
             "audit_hash": context.payload_hash
         })

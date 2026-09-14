@@ -96,12 +96,34 @@ DEMO_PRESETS: List[Dict[str, Any]] = [
         "repo": "org/checkout",
         "commit_sha": "e5f6a1b2c3d478901234567890abcdef12345681",
         "author": "dev-dave@fintech.corp",
+        "language": "python",
         "diff": """--- a/tests/test_checkout.py
 +++ b/tests/test_checkout.py
 @@ -5,4 +5,8 @@
  # Live card accidentally committed in test fixture
  TEST_CARD_PAN = "4532 0150 1234 5678"
  STRIPE_SECRET = "sk" + "_" + "live_1234567890abcdef1234567890abcdef"
+"""
+    },
+    {
+        "id": "preset_js_sql_injection",
+        "title": "Node.js SQL Injection & Missing Await",
+        "category": "SECURITY_DLP",
+        "severity": "CRITICAL",
+        "description": "JavaScript template string interpolation in database query without parameterization and missing await.",
+        "repo": "org/express-ledger",
+        "commit_sha": "f1a2b3c4d5e678901234567890abcdef12345682",
+        "author": "dev-js@fintech.corp",
+        "language": "javascript",
+        "diff": """--- a/routes/wallet.js
++++ b/routes/wallet.js
+@@ -10,5 +10,8 @@
+ app.post('/api/transfer', async (req, res) => {
+   const { accountId, amount } = req.body;
+   // Vulnerability: SQL Injection via template literals
+   const result = db.query(`SELECT * FROM accounts WHERE id = '${accountId}'`);
+   return res.json({ balance: result.balance });
+ });
 """
     }
 ]

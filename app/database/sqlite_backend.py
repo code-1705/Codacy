@@ -107,9 +107,25 @@ class SQLiteDatabaseBackend:
                     findings_count INTEGER DEFAULT 0,
                     dlp_status TEXT NOT NULL,
                     execution_duration_ms INTEGER NOT NULL,
+                    quality_score REAL DEFAULT 10.0,
+                    user_id TEXT DEFAULT 'default_user',
+                    language TEXT DEFAULT 'python',
                     created_at TEXT NOT NULL
                 )
             """)
+            # Ensure columns exist if table was already created earlier
+            try:
+                cursor.execute("ALTER TABLE review_sessions ADD COLUMN quality_score REAL DEFAULT 10.0")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                cursor.execute("ALTER TABLE review_sessions ADD COLUMN user_id TEXT DEFAULT 'default_user'")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                cursor.execute("ALTER TABLE review_sessions ADD COLUMN language TEXT DEFAULT 'python'")
+            except sqlite3.OperationalError:
+                pass
 
             # 2. Historical PR Incidents Vector Table
             cursor.execute("""
@@ -176,12 +192,19 @@ class SQLiteDatabaseBackend:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO review_sessions (id, repo_name, pr_id, commit_sha, author_id, payload_hash, findings_count, dlp_status, execution_duration_ms, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO review_sessions (
+                    id, repo_name, pr_id, commit_sha, author_id, payload_hash,
+                    findings_count, dlp_status, execution_duration_ms, quality_score, user_id, language, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 session.id, session.repo_name, session.pr_id, session.commit_sha,
                 session.author_id, session.payload_hash, session.findings_count,
-                session.dlp_status, session.execution_duration_ms, session.created_at
+                session.dlp_status, session.execution_duration_ms,
+                getattr(session, "quality_score", 10.0),
+                getattr(session, "user_id", "default_user"),
+                getattr(session, "language", "python"),
+                session.created_at
             ))
             conn.commit()
             return session.id
@@ -194,6 +217,7 @@ class SQLiteDatabaseBackend:
             row = cursor.fetchone()
             if not row:
                 return None
+            keys = row.keys()
             return ReviewSession(
                 id=row["id"],
                 repo_name=row["repo_name"],
@@ -204,8 +228,68 @@ class SQLiteDatabaseBackend:
                 findings_count=row["findings_count"],
                 dlp_status=row["dlp_status"],
                 execution_duration_ms=row["execution_duration_ms"],
+                quality_score=row["quality_score"] if "quality_score" in keys else 10.0,
+                user_id=row["user_id"] if "user_id" in keys else "default_user",
+                language=row["language"] if "language" in keys else "python",
                 created_at=row["created_at"]
             )
+
+    def get_user_growth(self, user_id: str) -> Dict[str, Any]:
+        """Calculates persistent developer growth and quality score progression over time."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, repo_name, pr_id, quality_score, findings_count, language, created_at
+                FROM review_sessions
+                WHERE user_id = ? OR author_id = ?
+                ORDER BY created_at ASC
+            """, (user_id, user_id))
+            rows = cursor.fetchall()
+            if not rows:
+                return {
+                    "user_id": user_id,
+                    "total_reviews": 0,
+                    "average_score": 10.0,
+                    "score_trajectory": [],
+                    "improvement_delta": 0.0,
+                    "language_distribution": {},
+                    "verdict": "New Developer: No prior review sessions recorded."
+                }
+
+            scores = [float(r["quality_score"] or 10.0) for r in rows]
+            avg_score = round(sum(scores) / len(scores), 1)
+            initial_score = scores[0]
+            latest_score = scores[-1]
+            delta = round(latest_score - initial_score, 1)
+
+            lang_dist: Dict[str, int] = {}
+            for r in rows:
+                lang = r["language"] or "python"
+                lang_dist[lang] = lang_dist.get(lang, 0) + 1
+
+            trajectory = [
+                {
+                    "session_id": r["id"],
+                    "pr_id": r["pr_id"],
+                    "quality_score": float(r["quality_score"] or 10.0),
+                    "findings_count": r["findings_count"],
+                    "language": r["language"] or "python",
+                    "created_at": r["created_at"]
+                }
+                for r in rows
+            ]
+
+            return {
+                "user_id": user_id,
+                "total_reviews": len(rows),
+                "average_score": avg_score,
+                "initial_score": initial_score,
+                "latest_score": latest_score,
+                "improvement_delta": delta,
+                "score_trajectory": trajectory,
+                "language_distribution": lang_dist,
+                "verdict": f"Tracked {len(rows)} reviews. Trajectory delta: {delta:+.1f} points."
+            }
 
     # --- Semantic Vector Precedent Search ---
 

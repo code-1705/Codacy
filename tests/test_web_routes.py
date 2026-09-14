@@ -41,7 +41,7 @@ def test_get_presets_returns_five_scenarios():
     data = response.json()
     assert "presets" in data
     presets = data["presets"]
-    assert len(presets) == 5
+    assert len(presets) >= 5
 
     categories = [p["category"] for p in presets]
     assert "RACE_CONDITION" in categories

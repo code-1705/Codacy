@@ -98,11 +98,15 @@ def render_findings_report(findings: List[Dict[str, Any]], stats: Optional[Dict[
     med_count = sum(1 for f in findings if f.get("severity", "").upper() == "MEDIUM")
     low_count = sum(1 for f in findings if f.get("severity", "").upper() in ("LOW", "AUDIT_NOTE"))
 
+    from app.scoring import calculate_quality_rating
+    rating = calculate_quality_rating(findings)
+
     print(f"{BOLD}FinGuard Findings Summary:{RESET} "
           f"{RED}{BOLD}{crit_count} Critical{RESET} | "
           f"{MAGENTA}{high_count} High{RESET} | "
           f"{YELLOW}{med_count} Medium{RESET} | "
           f"{CYAN}{low_count} Low/Note{RESET}")
+    print(f"{BOLD}Code Quality Rating (1 to 10):{RESET} {YELLOW if rating.score < 7.5 else GREEN}{BOLD}{rating.score:.1f} / 10.0 (Grade {rating.grade}){RESET} — {DIM}{rating.verdict}{RESET}")
     print("=" * 76 + "\n")
 
     for i, finding in enumerate(findings, 1):

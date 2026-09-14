@@ -14,7 +14,52 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Attach Launch Review handler
   document.getElementById("btnLaunchReview").addEventListener("click", handleLaunchReview);
+
+  // Attach CSV Modal handlers
+  const csvDrawer = document.getElementById("csvDrawer");
+  const btnOpenCsvModal = document.getElementById("btnOpenCsvModal");
+  const btnCloseCsvModal = document.getElementById("btnCloseCsvModal");
+  const btnIngestCsv = document.getElementById("btnIngestCsv");
+
+  if (btnOpenCsvModal && csvDrawer) {
+    btnOpenCsvModal.addEventListener("click", () => {
+      csvDrawer.style.display = csvDrawer.style.display === "none" ? "block" : "none";
+    });
+  }
+  if (btnCloseCsvModal && csvDrawer) {
+    btnCloseCsvModal.addEventListener("click", () => {
+      csvDrawer.style.display = "none";
+    });
+  }
+  if (btnIngestCsv) {
+    btnIngestCsv.addEventListener("click", handleIngestCsv);
+  }
 });
+
+async function handleIngestCsv() {
+  const text = document.getElementById("csvInputText").value.trim();
+  if (!text) {
+    alert("Please provide CSV rules in schema: <id>, <type>, <description>");
+    return;
+  }
+  try {
+    const res = await fetch("/api/v1/rules/ingest-csv", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csv_content: text })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      appendTerminalLine(`[CSV LEARNING] Successfully ingested ${data.ingested_count} historical review rules into vector memory.`, "success");
+      document.getElementById("csvDrawer").style.display = "none";
+      await loadDynamicRules();
+    } else {
+      alert("Failed to ingest CSV rules.");
+    }
+  } catch (err) {
+    console.error("CSV error:", err);
+  }
+}
 
 /**
  * Checks backend health and sets active backend name in nav pill.
@@ -72,8 +117,13 @@ function renderPresetButtons(presets) {
 function selectPreset(preset) {
   document.getElementById("diffInput").value = preset.diff.trim();
   document.getElementById("repoInput").value = preset.repo;
-  document.getElementById("authorInput").value = preset.author;
-  appendTerminalLine(`[PRESET] Loaded "${preset.title}" (${preset.severity})`, "highlight");
+  if (document.getElementById("authorInput")) {
+    document.getElementById("authorInput").value = preset.author;
+  }
+  if (preset.language && document.getElementById("langSelect")) {
+    document.getElementById("langSelect").value = preset.language;
+  }
+  appendTerminalLine(`[PRESET] Loaded "${preset.title}" (${preset.severity} | ${preset.language || 'python'})`, "highlight");
 }
 
 /**
@@ -115,7 +165,9 @@ async function handleLaunchReview() {
   const btn = document.getElementById("btnLaunchReview");
   const diff = document.getElementById("diffInput").value.trim();
   const repo = document.getElementById("repoInput").value.trim();
-  const author = document.getElementById("authorInput").value.trim();
+  const author = document.getElementById("authorInput") ? document.getElementById("authorInput").value.trim() : "alice@fintech.corp";
+  const user = document.getElementById("userInput") ? document.getElementById("userInput").value.trim() : "alice_dev";
+  const lang = document.getElementById("langSelect") ? document.getElementById("langSelect").value : "python";
 
   if (!diff) {
     alert("Please enter or select a code diff to review.");
@@ -128,7 +180,7 @@ async function handleLaunchReview() {
   document.getElementById("findingsContainer").innerHTML = "";
   document.getElementById("findingCountBadge").textContent = "Analyzing...";
   clearTerminal();
-  appendTerminalLine(`[START] Ingesting diff payload for ${repo}...`, "highlight");
+  appendTerminalLine(`[START] Ingesting ${lang.toUpperCase()} payload for ${repo} (User: ${user})...`, "highlight");
 
   try {
     // Step 1: Ingest (POST)
@@ -139,7 +191,9 @@ async function handleLaunchReview() {
         diff: diff,
         repo: repo,
         commit_sha: "head_eval_" + Date.now().toString(16),
-        author_id: author
+        author_id: author,
+        user_id: user,
+        language: lang
       })
     });
 
@@ -155,8 +209,18 @@ async function handleLaunchReview() {
     document.getElementById("dlpStatus").textContent = startData.dlp_status;
     document.getElementById("dlpRedacted").textContent = `${startData.redacted_count} Secrets Scrubbed`;
 
+    if (startData.quality_score !== undefined) {
+      const qTile = document.getElementById("qualityTile");
+      const qScoreText = document.getElementById("qualityScoreText");
+      const qGradeText = document.getElementById("qualityGradeText");
+      if (qScoreText && qGradeText) {
+        qScoreText.textContent = `${startData.quality_score.toFixed(1)} / 10`;
+        qGradeText.textContent = `Grade ${startData.quality_grade || 'A'} • Initial`;
+      }
+    }
+
     appendTerminalLine(`[TIER 1 DLP] Status: ${startData.dlp_status} (${startData.redacted_count} redacted)`, startData.dlp_status === "CLEAN" ? "success" : "warning");
-    appendTerminalLine(`[TIER 0 AST] Scanned diff: ${startData.ast_findings_count} deterministic alerts`, "highlight");
+    appendTerminalLine(`[TIER 0 AST] Scanned diff: ${startData.ast_findings_count} alerts (Lang: ${startData.language || lang})`, "highlight");
 
     // Step 2: Open SSE Stream
     btn.innerHTML = `<span>📡</span> Streaming Gemini 1.5 Flash...`;
@@ -221,6 +285,16 @@ function openReviewStream(sessionId) {
     const data = JSON.parse(e.data);
     appendTerminalLine(`[COMPLETE] Analysis finished in ${data.total_latency_ms}ms. Total Findings: ${data.total_findings}`, "success");
     document.getElementById("geminiTokens").textContent = `${Math.round(data.total_latency_ms)} ms`;
+
+    if (data.quality_score !== undefined) {
+      const qScoreText = document.getElementById("qualityScoreText");
+      const qGradeText = document.getElementById("qualityGradeText");
+      if (qScoreText && qGradeText) {
+        qScoreText.textContent = `${data.quality_score.toFixed(1)} / 10`;
+        qGradeText.textContent = `Grade ${data.quality_grade} • ${data.quality_verdict ? data.quality_verdict.substring(0, 20) : 'Reviewed'}`;
+      }
+      appendTerminalLine(`[QUALITY RATING] Standardized Score: ${data.quality_score.toFixed(1)} / 10.0 (Grade ${data.quality_grade})`, data.quality_score >= 7.5 ? "success" : "warning");
+    }
 
     // Reset button
     const btn = document.getElementById("btnLaunchReview");

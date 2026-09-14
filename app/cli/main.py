@@ -321,6 +321,26 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ingest_csv(args: argparse.Namespace) -> int:
+    """Handles `finguard ingest-csv <file.csv>` subcommand."""
+    csv_file = args.csv_file
+    if not os.path.exists(csv_file):
+        print(f"Error: CSV file not found: {csv_file}", file=sys.stderr)
+        return 2
+
+    with open(csv_file, "r", encoding="utf-8", errors="replace") as f:
+        content = f.read()
+
+    from app.database.manager import DatabaseManager
+    db_mgr = DatabaseManager()
+    result = db_mgr.ingest_csv(content)
+    print_banner()
+    print(f"✅ Historical Learning Ingestion Complete: {result.get('ingested_count', 0)} rules vectorized and integrated.")
+    for r in result.get("rules", []):
+        print(f"  • [{r.get('rule_type', '').upper()}] {r.get('rule_id')}: {r.get('description')}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Builds the main CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -339,9 +359,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_review.add_argument("--cloud", action="store_true", help="Review using Cloud Run remote gateway")
     p_review.add_argument("--local", action="store_true", default=True, help="Review locally (default)")
     p_review.add_argument("--severity", type=str, default="medium", choices=["critical", "high", "medium", "low", "audit_note"], help="Minimum severity threshold to report")
+    p_review.add_argument("--language", "-l", type=str, default=None, choices=["python", "javascript", "typescript", "go", "java"], help="Target programming language")
+    p_review.add_argument("--user-id", "-u", type=str, default="default_user", help="User ID for tracking developer growth")
     p_review.add_argument("--json", action="store_true", help="Output findings as JSON")
     p_review.add_argument("--ui", action="store_true", help="Launch interactive browser dashboard")
     p_review.add_argument("--endpoint", type=str, default=None, help="Custom Cloud Run API endpoint")
+
+    # Ingest CSV command (Track 1 requirement)
+    p_csv = subparsers.add_parser("ingest-csv", help="Ingest historical review rules from CSV (<id>, <type>, <description>)")
+    p_csv.add_argument("csv_file", type=str, help="Path to CSV file with <id>, <type>, <description>")
 
     # Init command
     p_init = subparsers.add_parser("init", help="Initialize FinGuard configuration for current repo")
@@ -377,6 +403,7 @@ def cli_entry():
         "uninstall-hook": cmd_uninstall_hook,
         "dashboard": cmd_dashboard,
         "doctor": cmd_doctor,
+        "ingest-csv": cmd_ingest_csv,
     }
 
     handler = dispatch.get(args.command)

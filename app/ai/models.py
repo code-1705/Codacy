@@ -78,6 +78,8 @@ class ReviewStartRequest(BaseModel):
     repo: str = "default/repository"
     commit_sha: str = "0000000000000000000000000000000000000000"
     author_id: str = "developer@fintech.corp"
+    user_id: str = "developer_default"
+    language: str = "python"  # "python" | "javascript" | "typescript" | "go" | "java"
     execution_mode: str = "cloud"  # "cloud" | "local"
 
 
@@ -89,3 +91,6 @@ class ReviewStartResponse(BaseModel):
     dlp_status: str
     redacted_count: int
     ast_findings_count: int
+    quality_score: float = 10.0
+    quality_grade: str = "A+"
+    language: str = "python"

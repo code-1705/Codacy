@@ -19,6 +19,9 @@ class ReviewSession:
     findings_count: int
     dlp_status: str  # "CLEAN" | "REDACTED" | "QUARANTINED"
     execution_duration_ms: int
+    quality_score: float = 10.0  # Standardized 1.0 to 10.0 scale
+    user_id: str = "default_user"  # Persistent user session identifier
+    language: str = "python"  # python | javascript | typescript | go | java
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def to_dict(self) -> Dict[str, Any]:

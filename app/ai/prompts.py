@@ -54,15 +54,24 @@ def build_grounding_prompt(
     historical_precedents: Optional[List[Dict[str, Any]]] = None,
     elevated_rules: Optional[List[str]] = None,
     repo_name: str = "org/repo",
-    commit_sha: str = "head"
+    commit_sha: str = "head",
+    language: str = "python"
 ) -> str:
     """
     Constructs a comprehensive, grounded prompt fusing deterministic AST findings,
-    retrieved pgvector historical incidents, and elevated dynamic rule weights.
+    retrieved pgvector historical incidents, elevated dynamic rule weights,
+    and target programming language guidelines.
     """
+    from app.multilang import get_language_guidelines
+    guidelines = get_language_guidelines(language)
+
     prompt_parts = [
-        f"### CODE AUDIT REQUEST FOR REPOSITORY: {repo_name} (Commit: {commit_sha})\n",
-        "#### DLP-SANITIZED CODE DIFF TO ANALYZE:",
+        f"### CODE AUDIT REQUEST FOR REPOSITORY: {repo_name} (Language: {language.upper()} | Commit: {commit_sha})\n",
+        f"#### TARGET PROGRAMMING LANGUAGE GUIDELINES ({language.upper()}):",
+        "- Best Practices: " + "; ".join(guidelines.best_practices),
+        "- Common Anti-Patterns: " + "; ".join(guidelines.common_anti_patterns),
+        "- Concurrency / ACID Note: " + guidelines.transaction_concurrency_note,
+        "\n#### DLP-SANITIZED CODE DIFF TO ANALYZE:",
         "```diff",
         sanitized_diff.strip(),
         "```\n"

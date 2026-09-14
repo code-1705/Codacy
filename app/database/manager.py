@@ -122,3 +122,12 @@ class DatabaseManager:
             increment_reverts=increment_reverts
         )
 
+    def get_user_growth(self, user_id: str) -> Dict[str, Any]:
+        """Retrieves user score progression and growth trajectory."""
+        return self.sqlite.get_user_growth(user_id)
+
+    def ingest_csv(self, csv_text: str) -> Dict[str, Any]:
+        """Ingests historical review rules from CSV format: <id>, <type>, <description>."""
+        from app.csv_ingestion import ingest_csv_into_database
+        return ingest_csv_into_database(csv_text, self)
+
