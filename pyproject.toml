@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "finguard"
+version = "1.0.0"
+description = "FinGuard: 24/7 Intelligent FinTech Verifiable Code Review Engine (created at Code Kitchen Season 01)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "FinGuard Team", email = "lead@finguard.fintech" }
+]
+keywords = ["fintech", "code-review", "vertex-ai", "gemini", "ast", "dlp", "pci-dss"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Security",
+]
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.28.0",
+    "pydantic>=2.6.0",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+gcp = [
+    "google-cloud-aiplatform>=1.38.0",
+    "google-cloud-dlp>=3.15.0",
+    "psycopg2-binary>=2.9.9",
+    "sqlalchemy>=2.0.28",
+    "pgvector>=0.2.5",
+]
+dev = [
+    "pytest>=7.4.4",
+    "httpx>=0.27.0",
+    "anyio>=3.7.1",
+]
+
+[project.scripts]
+finguard = "app.cli.main:cli_entry"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
