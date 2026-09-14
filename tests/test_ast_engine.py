@@ -310,15 +310,14 @@ def calculate_interest(principal):
 
 def test_wire_speed_benchmark_1000_lines(analyzer):
     # Construct realistic 1000 lines of Python code
-    chunk = """
-def process_entry_{i}(account_id: str, balance: int):
+    chunk = """def process_entry_{i}(account_id: str, balance: int):
     status = "OK"
     if balance < 0:
         return False
-    return True
-"""
-    large_code = "\n".join(chunk.format(i=i) for i in range(200))
-    assert len(large_code.splitlines()) >= 1000
+    return True"""
+    raw_code = "\n".join(chunk.format(i=i) for i in range(200))
+    large_code = "\n".join(raw_code.splitlines()[:1000])
+    assert len(large_code.splitlines()) == 1000
 
     # Best-of-3 runs to account for OS scheduling noise on Windows
     runs = [analyzer.analyze_source(large_code) for _ in range(3)]
