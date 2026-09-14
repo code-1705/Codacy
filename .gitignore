@@ -41,7 +41,7 @@ Thumbs.db
 *.swp
 *.swo
 
-# Node / Web Frontend (if applicable)
+# Node / Web Frontend
 node_modules/
 dist/
 build/
@@ -55,6 +55,12 @@ yarn-error.log*
 /sandbox_temp/
 /tmp/
 *.tmp
-/agents
+.finguard/memory.db
+.finguard/*.db
+.finguard/*.log
+!.finguard/learning_ledger.json
+!.finguard/config.yaml
+
 agents.md
-.finguard
+/agents
+AGENTS.md

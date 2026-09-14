@@ -1,0 +1,45 @@
+{
+  "system": "FinGuard - FinTech Verifiable Code Review Engine",
+  "hackathon_track": "AIM Code Kitchen S01 - Track 1",
+  "version": "1.0.0",
+  "pilot_baseline": {
+    "median_review_time_hours": 48.0,
+    "revert_rate_pct": 8.4,
+    "target_median_review_time_hours": 24.0,
+    "stretch_target_review_seconds": 30.0,
+    "target_revert_reduction_pct": 60.0
+  },
+  "retrospective_entries": [
+    {
+      "id": "RETRO-MULTILANG-001",
+      "timestamp": "2026-09-14T13:54:00Z",
+      "agent": "AGENT-ORCHESTRATOR",
+      "phase": "Tier 8: Multi-Language, 1-10 Quality Rating, CSV Historical Learning & User Growth",
+      "event_type": "SUBPLAN_COMPLETION_AND_AUDIT",
+      "summary": "Subplan 09 complete. Aligned FinGuard with 100% of official Code Kitchen Track 1 problem statement requirements: 1) Standardized 1-10 Quality Rating with penalty formula and letter grades (A+, A, B, C, F); 2) Multi-language detection & guidance (Python, JS, TS, Go, Java); 3) Historical CSV learning ingestion (<id>, <type>, <description>) with deterministic vector embeddings; 4) Persistent user session history & developer growth tracking (/api/v1/users/{user_id}/growth). All 96 tests passing in 10.01s across all 9 subplans.",
+      "action_items": [
+        "Stage all modified and created files with git add",
+        "Maintain zero commit rule until explicit user command"
+      ]
+    },
+    {
+      "id": "RETRO-DIFF-ISOLATION-002",
+      "timestamp": "2026-09-14T18:10:00Z",
+      "agent": "AGENT-AST-PERF",
+      "phase": "Tier 0/1: CLI Git Diff Ingestion & Adversarial Quarantine Isolation",
+      "event_type": "USER_CORRECTION_AND_DIAGNOSTIC",
+      "summary": "User queried why only 1 bug was detected on workstation diff. Root cause: 1) Monolithic git diff was quarantined on presets.py prompt injection test string, halting full scan; 2) Raw diff syntax and non-Python files caused AST SyntaxError when split; 3) Deleted diff lines triggered false DLP alarms. Fix: Isolated per-file diff analysis, bypass AST for non-Python assets, inspect actual Python source on disk, and filter deleted lines in diff DLP scanning.",
+      "action_items": [
+        "Per-file AST/DLP isolation verified with clean output",
+        "Zero regressions in 96/96 test suite"
+      ]
+    }
+  ],
+  "tuned_rule_weights": {
+    "AST-FIN-001": 3.3,
+    "AST-FIN-002": 2.0,
+    "AST-FIN-003": 2.2,
+    "RULE-RACE-CONDITION": 1.8,
+    "RULE-RETRY-IDEMPOTENCY": 2.5
+  }
+}

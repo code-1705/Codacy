@@ -26,8 +26,8 @@ IDEMPOTENCY_ROUTE_PREFIXES = (
 )
 
 # Common network call identifiers
-NETWORK_CALL_MODULES = {"requests", "httpx", "urllib", "aiohttp", "urllib3"}
-NETWORK_CALL_METHODS = {"get", "post", "put", "patch", "delete", "request", "urlopen"}
+NETWORK_CALL_MODULES = {"requests", "httpx", "urllib", "aiohttp", "urllib3", "stripe", "paypal", "plaid", "boto3", "swift_gateway"}
+NETWORK_CALL_METHODS = {"get", "post", "put", "patch", "delete", "request", "urlopen", "create", "charge", "dispatch_wire", "dispatch"}
 
 # Debit/deduct function patterns
 DEBIT_FUNCTION_PATTERNS = {
@@ -66,6 +66,10 @@ class FinTechASTVisitor(ast.NodeVisitor):
         if not name:
             return False
         lower = name.lower()
+        # Telemetry/timing metrics are not financial balances/currencies
+        NON_FINANCIAL_TOKENS = {"latency", "duration", "time", "seconds", "millis", "ms", "count", "iteration", "tokens"}
+        if any(nft in lower for nft in NON_FINANCIAL_TOKENS):
+            return False
         if lower in FINANCIAL_KEYWORDS:
             return True
         return any(kw in lower for kw in FINANCIAL_KEYWORDS)

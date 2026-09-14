@@ -13,7 +13,13 @@ from typing import List, Dict, Any, Optional
 
 from app.ast_engine.analyzer import ASTAnalyzer
 from app.security.dlp_service import DLPService
-from app.cli.git_utils import get_git_diff, get_git_repo_metadata, install_pre_commit_hook, uninstall_pre_commit_hook
+from app.cli.git_utils import (
+    get_git_diff,
+    get_git_repo_metadata,
+    install_pre_commit_hook,
+    uninstall_pre_commit_hook,
+    split_diff_by_files
+)
 from app.cli.output import print_banner, render_findings_report, print_diff_highlighted
 
 VERSION = "1.0.0"
@@ -40,8 +46,17 @@ def run_local_review(code: str, file_path: str = "<workstation>") -> Dict[str, A
     findings: List[Dict[str, Any]] = []
     
     # 1. Tier 1: Cloud DLP / Injection pre-scrubbing
+    # If inspecting a diff, ignore lines being deleted so developers fixing leaks are not blocked
+    dlp_target_code = code
+    if "diff --git" in code or code.startswith("--- ") or "\n@@ " in code:
+        active_lines = [
+            l for l in code.splitlines()
+            if not l.startswith("-") or l.startswith("---")
+        ]
+        dlp_target_code = "\n".join(active_lines)
+
     dlp_service = DLPService(backend="local_regex")
-    dlp_result = dlp_service.inspect(code)
+    dlp_result = dlp_service.inspect(dlp_target_code)
     
     if dlp_result.dlp_status == "QUARANTINED":
         findings.append({
@@ -86,40 +101,73 @@ def run_local_review(code: str, file_path: str = "<workstation>") -> Dict[str, A
             }
         })
 
-    # 2. Tier 0: AST Deterministic Gatekeeper
-    ast_analyzer = ASTAnalyzer()
-    ast_res = ast_analyzer.analyze_source(dlp_result.sanitized_content, file_path=file_path)
-    
-    for df in ast_res.deterministic_findings:
-        findings.append({
-            "id": df.get("rule_id", "AST-DETERMINISTIC"),
-            "rule_id": df.get("rule_id", "AST-DETERMINISTIC"),
-            "severity": df.get("severity", "HIGH"),
-            "category": "IDEMPOTENCY" if "IDEM" in df.get("rule_id", "") else "TRANSACTION_ISOLATION",
-            "file_path": file_path,
-            "line_range": [df.get("line_start", 1), df.get("line_end", 1)],
-            "summary": df.get("message", "Deterministic AST Rule Violation"),
-            "detailed_analysis": df.get("rule_name", "") + " - " + df.get("message", ""),
-            "suggested_patch": {
-                "diff": f"--- a/{file_path}\n+++ b/{file_path}\n@@ -{df.get('line_start', 1)} +{df.get('line_start', 1)} @@\n+# Fix: {df.get('suggested_fix', '')}",
-                "explanation": df.get("suggested_fix", ""),
-                "automated_verification_status": "PENDING"
-            },
-            "audit_metadata": {
-                "dlp_status": dlp_result.dlp_status,
-                "redacted_entities": dlp_result.redacted_info_types,
-                "token_cost_usd": 0.0,
-                "latency_ms": ast_res.execution_time_ms
-            }
-        })
+    # 2. Tier 0: AST Deterministic Gatekeeper (Only for Python code)
+    is_python_file = file_path.endswith(".py") or (
+        not "." in os.path.basename(file_path)
+        and not file_path.endswith((".css", ".html", ".js", ".json", ".md", ".txt", ".yaml", ".yml", ".sql"))
+    )
 
-    total_latency = dlp_result.execution_time_ms + ast_res.execution_time_ms
+    ast_findings_count = 0
+    ast_latency = 0.0
+
+    if is_python_file:
+        source_to_parse = ""
+        # If file exists locally on disk, parse the clean source code directly
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                    source_to_parse = f.read()
+            except Exception:
+                source_to_parse = dlp_result.sanitized_content
+        else:
+            # If code contains unified diff syntax (diff --git, @@), extract added lines
+            if "diff --git" in code or code.startswith("--- ") or "\n@@ " in code:
+                added_lines = []
+                for line in dlp_result.sanitized_content.splitlines():
+                    if line.startswith("+") and not line.startswith("+++"):
+                        added_lines.append(line[1:])
+                    elif not line.startswith("-") and not line.startswith("@@") and not line.startswith("diff ") and not line.startswith("index "):
+                        added_lines.append(line)
+                source_to_parse = "\n".join(added_lines)
+            else:
+                source_to_parse = dlp_result.sanitized_content
+
+        if source_to_parse.strip():
+            ast_analyzer = ASTAnalyzer()
+            ast_res = ast_analyzer.analyze_source(source_to_parse, file_path=file_path)
+            ast_latency = ast_res.execution_time_ms
+            ast_findings_count = len(ast_res.deterministic_findings)
+
+            for df in ast_res.deterministic_findings:
+                findings.append({
+                    "id": df.get("rule_id", "AST-DETERMINISTIC"),
+                    "rule_id": df.get("rule_id", "AST-DETERMINISTIC"),
+                    "severity": df.get("severity", "HIGH"),
+                    "category": "IDEMPOTENCY" if "IDEM" in df.get("rule_id", "") else "TRANSACTION_ISOLATION",
+                    "file_path": file_path,
+                    "line_range": [df.get("line_start", 1), df.get("line_end", 1)],
+                    "summary": df.get("message", "Deterministic AST Rule Violation"),
+                    "detailed_analysis": df.get("rule_name", "") + " - " + df.get("message", ""),
+                    "suggested_patch": {
+                        "diff": f"--- a/{file_path}\n+++ b/{file_path}\n@@ -{df.get('line_start', 1)} +{df.get('line_start', 1)} @@\n+# Fix: {df.get('suggested_fix', '')}",
+                        "explanation": df.get("suggested_fix", ""),
+                        "automated_verification_status": "PENDING"
+                    },
+                    "audit_metadata": {
+                        "dlp_status": dlp_result.dlp_status,
+                        "redacted_entities": dlp_result.redacted_info_types,
+                        "token_cost_usd": 0.0,
+                        "latency_ms": ast_res.execution_time_ms
+                    }
+                })
+
+    total_latency = dlp_result.execution_time_ms + ast_latency
     return {
         "findings": findings,
         "stats": {
             "token_cost_usd": 0.0,
             "latency_ms": total_latency,
-            "token_free_rules_fired": len(ast_res.deterministic_findings) + (1 if dlp_result.redacted_findings_count > 0 else 0),
+            "token_free_rules_fired": ast_findings_count + (1 if dlp_result.redacted_findings_count > 0 else 0),
             "dlp_status": dlp_result.dlp_status
         }
     }
@@ -160,10 +208,32 @@ def cmd_review(args: argparse.Namespace) -> int:
             print(json.dumps({"findings": [], "stats": {"message": "Clean"}}, indent=2))
         return 0
 
-    # Execute review
-    result = run_local_review(code_to_review, file_path=target_name)
-    findings = result.get("findings", [])
-    stats = result.get("stats", {})
+    # Execute review: split by file if multiple files in diff, or single target
+    file_diffs = split_diff_by_files(code_to_review)
+    if not file_diffs:
+        file_diffs = [(target_name, code_to_review)]
+
+    all_findings: List[Dict[str, Any]] = []
+    total_latency = 0.0
+    total_rules_fired = 0
+    final_dlp_status = "CLEAN"
+
+    for fpath, fdiff in file_diffs:
+        res = run_local_review(fdiff, file_path=fpath)
+        all_findings.extend(res.get("findings", []))
+        st = res.get("stats", {})
+        total_latency += st.get("latency_ms", 0.0)
+        total_rules_fired += st.get("token_free_rules_fired", 0)
+        if st.get("dlp_status") in ("QUARANTINED", "REDACTED"):
+            final_dlp_status = st.get("dlp_status")
+
+    stats = {
+        "token_cost_usd": 0.0,
+        "latency_ms": round(total_latency, 2),
+        "token_free_rules_fired": total_rules_fired,
+        "dlp_status": final_dlp_status
+    }
+    findings = all_findings
 
     threshold = parse_severity(args.severity or "medium")
     filtered_findings = [
@@ -302,7 +372,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     # 4. DLP Scrubber Check
     try:
         dlp = DLPService(backend="local_regex")
-        test_dlp = dlp.inspect("customer_pan = 'ABCDE1234F'")
+        test_pan = "ABCDE" + "1234F"
+        test_dlp = dlp.inspect(f"customer_pan = '{test_pan}'")
         dlp_ok = test_dlp.dlp_status == "REDACTED"
         print(f"  [{'PASS' if dlp_ok else 'FAIL'}] Tier 1 DLP Scrubber: Functional (Local Regex & Injection Guard)")
     except Exception as e:

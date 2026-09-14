@@ -64,6 +64,9 @@ class ReviewSessionContext:
         self.user_id = user_id
         self.language = language
         self.created_at = time.time()
+        self.completed_findings: List[Dict[str, Any]] = []
+        self.final_rating: Optional[Dict[str, Any]] = None
+        self.status: str = "IN_PROGRESS"
 
 
 class ReviewCoordinator:
@@ -301,6 +304,16 @@ class ReviewCoordinator:
         # 8. Emit final complete event with 1-10 quality rating
         from app.scoring import calculate_quality_rating
         final_rating = calculate_quality_rating([f.model_dump() for f in findings])
+
+        # Cache completed results for standalone report view
+        context.completed_findings = [f.model_dump() for f in findings]
+        context.final_rating = final_rating.to_dict() if hasattr(final_rating, "to_dict") else {
+            "score": final_rating.score,
+            "grade": final_rating.grade,
+            "verdict": final_rating.verdict,
+            "penalties": final_rating.penalties
+        }
+        context.status = "ANALYSIS_COMPLETE"
 
         total_latency_ms = round((time.perf_counter() - stream_start) * 1000.0, 2)
         yield format_sse_event("complete", {

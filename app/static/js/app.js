@@ -7,34 +7,93 @@ let currentEventSource = null;
 let currentSessionId = null;
 let activePresets = [];
 
-document.addEventListener("DOMContentLoaded", async () => {
-  await loadHealthAndBackend();
-  await loadPresets();
-  await loadDynamicRules();
+document.addEventListener("DOMContentLoaded", () => {
+  // Attach RUN AUDIT button handler immediately
+  const btnRun = document.getElementById("btnLaunchReview");
+  if (btnRun) {
+    btnRun.addEventListener("click", handleLaunchReview);
+  }
 
-  // Attach Launch Review handler
-  document.getElementById("btnLaunchReview").addEventListener("click", handleLaunchReview);
+  // Attach Right Pane Tab Switcher (CODE EDITOR <-> AUDIT REPORT)
+  const tabBtnEditor = document.getElementById("tabBtnEditor");
+  const tabBtnReport = document.getElementById("tabBtnReport");
+  const viewEditor = document.getElementById("viewCodeEditor");
+  const viewReport = document.getElementById("viewAuditReport");
 
-  // Attach CSV Modal handlers
-  const csvDrawer = document.getElementById("csvDrawer");
-  const btnOpenCsvModal = document.getElementById("btnOpenCsvModal");
-  const btnCloseCsvModal = document.getElementById("btnCloseCsvModal");
-  const btnIngestCsv = document.getElementById("btnIngestCsv");
+  if (tabBtnEditor && tabBtnReport && viewEditor && viewReport) {
+    tabBtnEditor.addEventListener("click", () => {
+      tabBtnEditor.classList.add("active");
+      tabBtnReport.classList.remove("active");
+      viewEditor.style.display = "flex";
+      viewReport.style.display = "none";
+    });
 
-  if (btnOpenCsvModal && csvDrawer) {
-    btnOpenCsvModal.addEventListener("click", () => {
-      csvDrawer.style.display = csvDrawer.style.display === "none" ? "block" : "none";
+    tabBtnReport.addEventListener("click", () => {
+      tabBtnReport.classList.add("active");
+      tabBtnEditor.classList.remove("active");
+      viewEditor.style.display = "none";
+      viewReport.style.display = "flex";
     });
   }
-  if (btnCloseCsvModal && csvDrawer) {
-    btnCloseCsvModal.addEventListener("click", () => {
-      csvDrawer.style.display = "none";
-    });
-  }
-  if (btnIngestCsv) {
-    btnIngestCsv.addEventListener("click", handleIngestCsv);
-  }
+
+  // Safely trigger async background data loads
+  loadHealthAndBackend().catch(console.error);
+  loadPresets().catch(console.error);
+  loadDynamicRules().catch(console.error);
 });
+
+async function loadDeveloperGrowth() {
+  const userId = document.getElementById("userInput") ? document.getElementById("userInput").value.trim() : "alice_dev";
+  const container = document.getElementById("growthModalContent");
+  container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;">Fetching growth trajectory for <strong>${escapeHtml(userId)}</strong>...</div>`;
+
+  try {
+    const res = await fetch(`/api/v1/users/${encodeURIComponent(userId)}/growth`);
+    if (res.ok) {
+      const data = await res.json();
+      const trajectory = data.score_trajectory || [];
+      const avgScore = data.average_quality_score ? data.average_quality_score.toFixed(1) : "10.0";
+      const totalReviews = data.total_reviews_analyzed || 0;
+      const cleanRate = data.clean_pr_rate ? `${(data.clean_pr_rate * 100).toFixed(0)}%` : "100%";
+
+      let trajHtml = "";
+      if (trajectory.length > 0) {
+        trajHtml = trajectory.slice(-6).reverse().map(t => `
+          <div class="trajectory-item">
+            <span style="font-family: var(--font-mono); color: var(--text-secondary);">${t.timestamp.substring(11, 19)}</span>
+            <span style="font-weight: 700; color: ${t.score >= 8.5 ? 'var(--accent-emerald)' : 'var(--accent-amber)'};">${t.score.toFixed(1)} / 10.0 (${t.grade})</span>
+            <span style="color: var(--text-muted); font-size: 0.7rem;">${t.findings_count} findings</span>
+          </div>
+        `).join("");
+      } else {
+        trajHtml = `<div style="color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 10px;">No previous sessions yet. Run reviews to build growth telemetry.</div>`;
+      }
+
+      container.innerHTML = `
+        <div class="growth-grid">
+          <div class="growth-kpi-card">
+            <div class="growth-kpi-label">Lifetime Reviews</div>
+            <div class="growth-kpi-value">${totalReviews}</div>
+          </div>
+          <div class="growth-kpi-card">
+            <div class="growth-kpi-label">Average Score</div>
+            <div class="growth-kpi-value" style="color: var(--accent-emerald);">${avgScore}</div>
+          </div>
+          <div class="growth-kpi-card">
+            <div class="growth-kpi-label">Clean Pass Rate</div>
+            <div class="growth-kpi-value" style="color: var(--accent-cyan);">${cleanRate}</div>
+          </div>
+        </div>
+        <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;">Recent Review Quality Trajectory</div>
+        <div class="trajectory-list">${trajHtml}</div>
+      `;
+    } else {
+      container.innerHTML = `<div style="color: var(--accent-crimson); padding: 14px;">Failed to load developer profile.</div>`;
+    }
+  } catch (err) {
+    container.innerHTML = `<div style="color: var(--accent-crimson); padding: 14px;">Error connecting to growth telemetry: ${escapeHtml(err.message)}</div>`;
+  }
+}
 
 async function handleIngestCsv() {
   const text = document.getElementById("csvInputText").value.trim();
@@ -70,10 +129,15 @@ async function loadHealthAndBackend() {
     if (res.ok) {
       const data = await res.json();
       const statusPill = document.getElementById("backendStatus");
-      statusPill.textContent = `${data.active_backend.replace("_", " ").toUpperCase()} Active`;
+      if (statusPill) {
+        statusPill.textContent = `${data.active_backend.replace("_", " ").toUpperCase()} Active`;
+      }
     }
   } catch (err) {
-    document.getElementById("backendStatus").textContent = "Local SQLite Active";
+    const statusPill = document.getElementById("backendStatus");
+    if (statusPill) {
+      statusPill.textContent = "Local SQLite Active";
+    }
   }
 }
 
@@ -143,6 +207,7 @@ async function loadDynamicRules() {
 
 function renderTelemetryRules(rules) {
   const container = document.getElementById("telemetryRulesContainer");
+  if (!container) return;
   container.innerHTML = "";
 
   rules.forEach((r) => {
@@ -176,9 +241,8 @@ async function handleLaunchReview() {
 
   // Reset UI State
   btn.disabled = true;
-  btn.innerHTML = `<span>⏳</span> Pre-Flight Screening...`;
+  btn.innerHTML = `<span class="btn-icon">⏳</span><span class="btn-text">AUDITING...</span>`;
   document.getElementById("findingsContainer").innerHTML = "";
-  document.getElementById("findingCountBadge").textContent = "Analyzing...";
   clearTerminal();
   appendTerminalLine(`[START] Ingesting ${lang.toUpperCase()} payload for ${repo} (User: ${user})...`, "highlight");
 
@@ -204,13 +268,17 @@ async function handleLaunchReview() {
     const startData = await startRes.json();
     currentSessionId = startData.session_id;
 
-    // Update Step 1 HUD Tiles
-    document.getElementById("sessionPill").textContent = `Session: ${currentSessionId.substring(0, 8)}...`;
-    document.getElementById("dlpStatus").textContent = startData.dlp_status;
-    document.getElementById("dlpRedacted").textContent = `${startData.redacted_count} Secrets Scrubbed`;
+    // Update Step 1 HUD Tiles with null-safety
+    const sessEl = document.getElementById("sessionPill");
+    if (sessEl) sessEl.textContent = `Session: ${currentSessionId.substring(0, 8)}...`;
+    
+    const dlpEl = document.getElementById("dlpStatus");
+    if (dlpEl) dlpEl.textContent = startData.dlp_status;
+    
+    const dlpRedEl = document.getElementById("dlpRedacted");
+    if (dlpRedEl) dlpRedEl.textContent = `${startData.redacted_count} Secrets Scrubbed`;
 
     if (startData.quality_score !== undefined) {
-      const qTile = document.getElementById("qualityTile");
       const qScoreText = document.getElementById("qualityScoreText");
       const qGradeText = document.getElementById("qualityGradeText");
       if (qScoreText && qGradeText) {
@@ -219,11 +287,14 @@ async function handleLaunchReview() {
       }
     }
 
+    const wireStatus = document.getElementById("wireStatus");
+    if (wireStatus) wireStatus.textContent = "Auditing...";
+
     appendTerminalLine(`[TIER 1 DLP] Status: ${startData.dlp_status} (${startData.redacted_count} redacted)`, startData.dlp_status === "CLEAN" ? "success" : "warning");
     appendTerminalLine(`[TIER 0 AST] Scanned diff: ${startData.ast_findings_count} alerts (Lang: ${startData.language || lang})`, "highlight");
 
     // Step 2: Open SSE Stream
-    btn.innerHTML = `<span>📡</span> Streaming Gemini 1.5 Flash...`;
+    btn.innerHTML = `<span class="btn-icon">📡</span><span class="btn-text">REASONING...</span>`;
     openReviewStream(currentSessionId);
 
   } catch (err) {
@@ -272,7 +343,8 @@ function openReviewStream(sessionId) {
   currentEventSource.addEventListener("finding", (e) => {
     const finding = JSON.parse(e.data);
     findingCount++;
-    document.getElementById("findingCountBadge").textContent = `${findingCount} Issue${findingCount > 1 ? "s" : ""} Flagged`;
+    const badge = document.getElementById("findingCountBadge");
+    if (badge) badge.textContent = `${findingCount} Issue${findingCount > 1 ? "s" : ""} Flagged`;
     renderFindingCard(finding);
   });
 
@@ -284,7 +356,12 @@ function openReviewStream(sessionId) {
   currentEventSource.addEventListener("complete", (e) => {
     const data = JSON.parse(e.data);
     appendTerminalLine(`[COMPLETE] Analysis finished in ${data.total_latency_ms}ms. Total Findings: ${data.total_findings}`, "success");
-    document.getElementById("geminiTokens").textContent = `${Math.round(data.total_latency_ms)} ms`;
+    
+    const wireStatus = document.getElementById("wireStatus");
+    if (wireStatus) wireStatus.textContent = "Complete";
+
+    const gemEl = document.getElementById("geminiTokens");
+    if (gemEl) gemEl.textContent = `${Math.round(data.total_latency_ms)} ms`;
 
     if (data.quality_score !== undefined) {
       const qScoreText = document.getElementById("qualityScoreText");
@@ -296,10 +373,42 @@ function openReviewStream(sessionId) {
       appendTerminalLine(`[QUALITY RATING] Standardized Score: ${data.quality_score.toFixed(1)} / 10.0 (Grade ${data.quality_grade})`, data.quality_score >= 7.5 ? "success" : "warning");
     }
 
+    // Switch smoothly to AUDIT REPORT tab
+    const tabBtnEditor = document.getElementById("tabBtnEditor");
+    const tabBtnReport = document.getElementById("tabBtnReport");
+    const viewEditor = document.getElementById("viewCodeEditor");
+    const viewReport = document.getElementById("viewAuditReport");
+    const badge = document.getElementById("reportCountBadge");
+
+    if (badge) {
+      badge.textContent = data.total_findings;
+      badge.style.display = "inline-block";
+    }
+
+    if (tabBtnEditor && tabBtnReport && viewEditor && viewReport) {
+      tabBtnReport.classList.add("active");
+      tabBtnEditor.classList.remove("active");
+      viewEditor.style.display = "none";
+      viewReport.style.display = "flex";
+    }
+
+    const reportMeta = document.getElementById("reportMetaSubline");
+    if (reportMeta) {
+      reportMeta.textContent = `Session: ${sessionId} • Status: ANALYSIS_COMPLETE • Latency: ${data.total_latency_ms}ms`;
+    }
+
+    const extBtn = document.getElementById("btnExternalReport");
+    if (extBtn) {
+      extBtn.href = `/report/${sessionId}`;
+      extBtn.style.display = "inline-block";
+    }
+
     // Reset button
     const btn = document.getElementById("btnLaunchReview");
-    btn.disabled = false;
-    btn.innerHTML = `<span>🚀</span> Launch Intelligent Review`;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<span class="btn-icon">⚡</span><span class="btn-text">RUN AUDIT</span>`;
+    }
 
     if (currentEventSource) {
       currentEventSource.close();

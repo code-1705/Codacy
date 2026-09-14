@@ -3,183 +3,154 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FinGuard — 24/7 Intelligent FinTech Code Reviewer</title>
-  <meta name="description" content="Production-grade 24/7 Intelligent Code Reviewer combining token-free AST filtering, Cloud DLP, pgvector memory, and Vertex AI Gemini 1.5 Flash SSE streaming.">
+  <title>Codacy — Intelligent FinTech Review Engine</title>
+  <meta name="description" content="FinGuard / Codacy — Track 1: 24/7 Intelligent Code Reviewer created at AIM Code Kitchen Season 01">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/styles.css">
+  <link rel="stylesheet" href="/static/css/styles.css?v=2.3">
 </head>
 <body>
 
-  <!-- Top Navigation Bar -->
-  <header>
-    <div class="header-container">
-      <div class="brand">
-        <div class="logo-shield">🛡️</div>
-        <div>
-          <span class="brand-name">FinGuard</span>
-          <span class="brand-badge">Track 1: 24/7 Reviewer</span>
-        </div>
-      </div>
-      <div class="nav-meta">
-        <div class="credit-pill">AIM Code Kitchen S01 | <span>created at Code Kitchen Season 01</span></div>
-        <div class="status-pill">
-          <div class="status-dot"></div>
-          <span id="backendStatus">Cloud SQL pgvector Connected</span>
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <!-- Main Dashboard Grid -->
-  <main class="dashboard-grid">
+  <div class="split-viewport">
     
-    <!-- Left Column: Code Ingestion & Presets Drawer -->
-    <aside class="glass-panel" id="ingestionPanel">
-      <div class="panel-header">
-        <h2 class="panel-title">⚡ Ingestion Gateway</h2>
-        <span class="badge category">Tier 0 + Tier 1</span>
-      </div>
-
-      <!-- Quick Launch Presets -->
-      <div class="presets-group">
-        <div class="presets-label">Select Demo Vulnerability Preset:</div>
-        <div class="preset-buttons" id="presetButtonsContainer">
-          <!-- Populated dynamically by app.js -->
+    <!-- LEFT PANE: CONTROLS, TERMINAL & METRICS -->
+    <aside class="left-pane">
+      
+      <!-- Top Left Header: CODACY + CREDIT -->
+      <div class="left-top-bar">
+        <div class="brand-box">
+          <span class="brand-text">CODACY</span>
+        </div>
+        <div class="credit-box">
+          <span id="backendStatus" style="color: var(--accent-cyan); font-weight: 600;">SQLite Active</span>
+          <span>•</span>
+          <span>AIM Code Kitchen S01</span>
         </div>
       </div>
 
-      <!-- Git Diff Input -->
-      <div class="input-group">
-        <label class="input-label" for="diffInput">Unified Code Diff (Patch Payload):</label>
-        <textarea id="diffInput" class="diff-textarea" placeholder="Paste unified git diff here or select a demo preset above..." spellcheck="false"></textarea>
-      </div>
-
-      <!-- Meta Grid: Language, Repo, User -->
-      <div class="meta-grid" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 12px;">
-        <div>
-          <label class="input-label" for="langSelect">Language:</label>
-          <select id="langSelect" class="text-input" style="background: rgba(15, 23, 42, 0.8);">
-            <option value="python">Python</option>
-            <option value="javascript">JavaScript</option>
-            <option value="typescript">TypeScript</option>
-            <option value="go">Go (Golang)</option>
-            <option value="java">Java</option>
-          </select>
-        </div>
-        <div>
-          <label class="input-label" for="repoInput">Repository:</label>
-          <input type="text" id="repoInput" class="text-input" value="org/payments-engine">
-        </div>
-        <div>
-          <label class="input-label" for="userInput">User ID:</label>
-          <input type="text" id="userInput" class="text-input" value="alice_dev">
-        </div>
-      </div>
-
-      <!-- Action Buttons -->
-      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px;">
-        <button id="btnLaunchReview" class="btn-launch">
-          <span>🚀</span> Launch Review
-        </button>
-        <button id="btnOpenCsvModal" class="btn-preset" style="height: auto; border: 1px solid var(--accent-cyan); color: var(--accent-cyan);">
-          <span>📥</span> CSV Rules
-        </button>
-      </div>
-
-      <!-- CSV Ingestion Modal/Drawer (collapsible) -->
-      <div id="csvDrawer" style="display: none; margin-top: 14px; padding: 12px; background: rgba(15, 23, 42, 0.9); border: 1px solid var(--accent-cyan); border-radius: 8px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 0.75rem; font-weight: 700; color: var(--accent-cyan);">HISTORICAL CSV INGESTION (&lt;id&gt;, &lt;type&gt;, &lt;description&gt;)</span>
-          <button id="btnCloseCsvModal" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer;">✕</button>
-        </div>
-        <textarea id="csvInputText" class="diff-textarea" style="height: 70px; font-size: 0.75rem;" placeholder="1, formatting, Avoid single-character variable names&#10;2, performance, Cache repeated database lookups&#10;3, security, Never interpolate raw input into SQL"></textarea>
-        <button id="btnIngestCsv" class="btn-preset" style="width: 100%; margin-top: 6px; background: rgba(6, 182, 212, 0.2); color: var(--accent-cyan);">
-          ⚡ Vectorize & Learn Rules
-        </button>
-      </div>
-    </aside>
-
-    <!-- Right Column: Real-time Multi-Tier Review HUD & SSE Stream -->
-    <section class="glass-panel" id="auditPanel">
-      <div class="panel-header">
-        <h2 class="panel-title">📡 Real-Time Verification HUD</h2>
-        <span id="sessionPill" class="badge category">Session: Idle</span>
-      </div>
-
-      <!-- Multi-Tier Pipeline Metric Tiles -->
-      <div class="hud-metrics" style="grid-template-columns: repeat(5, 1fr);">
-        <div class="hud-tile emerald">
-          <div class="hud-label">Tier 0 AST Filter</div>
-          <div class="hud-value" id="astMetrics">0 ms</div>
-          <div class="hud-sub" id="astSavings">Zero Tokens Burned</div>
-        </div>
-        <div class="hud-tile">
-          <div class="hud-label">Tier 1 Cloud DLP</div>
-          <div class="hud-value" id="dlpStatus">CLEAN</div>
-          <div class="hud-sub" id="dlpRedacted">0 Secrets Scrubbed</div>
-        </div>
-        <div class="hud-tile purple">
-          <div class="hud-label">Tier 2 Vector Store</div>
-          <div class="hud-value" id="precedentScore">0.00</div>
-          <div class="hud-sub" id="precedentMatched">No Incident Match</div>
-        </div>
-        <div class="hud-tile amber">
-          <div class="hud-label">Tier 3 Vertex AI</div>
-          <div class="hud-value" id="geminiTokens">0 ms</div>
-          <div class="hud-sub" id="geminiModel">gemini-1.5-flash-001</div>
-        </div>
-        <div class="hud-tile" id="qualityTile" style="border: 1px solid var(--accent-emerald);">
-          <div class="hud-label" style="color: var(--accent-emerald);">Quality Rating</div>
-          <div class="hud-value" id="qualityScoreText" style="color: var(--accent-emerald);">10.0 / 10</div>
-          <div class="hud-sub" id="qualityGradeText">Grade A+ • Flawless</div>
-        </div>
-      </div>
-
-      <!-- Real-Time SSE Stream Terminal -->
-      <div class="terminal-card">
-        <div class="terminal-header">
+      <!-- Live Pipeline Terminal & Status Window -->
+      <div class="terminal-container">
+        <div class="terminal-top">
           <div class="terminal-dots">
             <span class="t-dot red"></span>
             <span class="t-dot yellow"></span>
             <span class="t-dot green"></span>
           </div>
-          <div class="terminal-title">Server-Sent Events (SSE) Wire Stream</div>
-          <div class="status-pill" style="padding: 2px 8px; font-size: 0.65rem;">Live Stream</div>
+          <span class="terminal-title">Server-Sent Events (SSE) Live Wire</span>
+          <span class="status-indicator" id="wireStatus">Ready</span>
         </div>
         <div class="terminal-body" id="terminalOutput">
-          <div class="t-line highlight">[SYSTEM] FinGuard initialized. Select a preset or paste a diff to trigger review.</div>
+          <div class="t-line highlight">[SYSTEM] Codacy Engine initialized. Select a scenario or paste code on the right.</div>
         </div>
       </div>
 
-      <!-- Structured Findings Section -->
-      <div class="panel-header" style="margin-top: 24px;">
-        <h3 class="panel-title">🛡️ Identified Vulnerabilities & Verified Fixes</h3>
-        <span id="findingCountBadge" class="badge critical">0 Findings</span>
+      <!-- Central Action: Big RUN AUDIT Button -->
+      <div class="action-wrap">
+        <button id="btnLaunchReview" class="btn-run-audit">
+          <span class="btn-icon">⚡</span>
+          <span class="btn-text">RUN AUDIT</span>
+        </button>
       </div>
-      <div class="findings-container" id="findingsContainer">
-        <!-- Finding cards rendered dynamically here -->
-        <div style="text-align: center; color: var(--text-muted); padding: 32px; font-size: 0.85rem;">
-          No active review. Click "Launch Intelligent Review" to inspect code.
+
+      <!-- Presets Bar -->
+      <div class="preset-selector-bar">
+        <div class="preset-label">Demo Vulnerability Scenarios:</div>
+        <div class="preset-buttons-grid" id="presetButtonsContainer">
+          <!-- Populated by app.js -->
         </div>
       </div>
 
-      <!-- Closed-Loop Telemetry Drawer -->
-      <div style="margin-top: 32px; border-top: 1px solid var(--border-glass); padding-top: 20px;">
-        <div class="panel-header">
-          <h3 class="panel-title">🔄 Closed-Loop Telemetry & Dynamic Bayesian Rule Weights</h3>
-          <span class="badge category">Tier 5 SRE</span>
+      <!-- Bottom 3 Metrics Box -->
+      <div class="metrics-triple-bar">
+        <div class="metric-col">
+          <div class="metric-label">AST FILTER</div>
+          <div class="metric-val" id="astMetrics">&lt; 15 ms</div>
+          <div class="metric-sub" id="astSavings">0 Tokens</div>
         </div>
-        <div class="telemetry-row" id="telemetryRulesContainer">
-          <!-- Populated dynamically -->
+        <div class="metric-col">
+          <div class="metric-label">CLOUD DLP</div>
+          <div class="metric-val" id="dlpStatus">CLEAN</div>
+          <div class="metric-sub" id="dlpRedacted">0 Secrets</div>
+        </div>
+        <div class="metric-col highlight-col" id="qualityTile">
+          <div class="metric-label" id="qualityLabel">QUALITY SCORE</div>
+          <div class="metric-val" id="qualityScoreText">10.0 / 10</div>
+          <div class="metric-sub" id="qualityGradeText">Grade A+</div>
         </div>
       </div>
 
-    </section>
+    </aside>
 
-  </main>
+    <!-- RIGHT PANE: CODE EDITOR / AUDIT REPORT TABS -->
+    <main class="right-pane">
+      
+      <!-- Right Header: CODE EDITOR | AUDIT REPORT TABS -->
+      <div class="right-tab-bar">
+        <div class="tab-group">
+          <button class="nav-tab active" id="tabBtnEditor">CODE EDITOR</button>
+          <button class="nav-tab" id="tabBtnReport">
+            AUDIT REPORT
+            <span class="report-badge" id="reportCountBadge" style="display: none;">0</span>
+          </button>
+        </div>
+        <div class="tab-meta">
+          <select id="langSelect" class="lang-pill">
+            <option value="python">Python</option>
+            <option value="javascript">JavaScript</option>
+            <option value="typescript">TypeScript</option>
+            <option value="go">Go</option>
+            <option value="java">Java</option>
+          </select>
+          <input type="text" id="repoInput" class="repo-pill" value="org/payments-engine" title="Repository">
+          <input type="text" id="userInput" class="repo-pill" value="alice_dev" title="Developer User ID">
+        </div>
+      </div>
 
-  <script src="/static/js/app.js"></script>
+      <!-- TAB VIEW 1: CODE EDITOR (FULL HEIGHT) -->
+      <div class="view-panel" id="viewCodeEditor">
+        <textarea
+          id="diffInput"
+          class="code-editor-full"
+          placeholder="Paste your source code or unified git diff here, then click RUN AUDIT on the left..."
+          spellcheck="false"
+        ></textarea>
+      </div>
+
+      <!-- TAB VIEW 2: DETAILED AUDIT REPORT -->
+      <div class="view-panel" id="viewAuditReport" style="display: none;">
+        
+        <div class="report-view-container">
+          
+          <div class="report-view-header">
+            <div>
+              <h2 class="report-headline">Executive FinTech Audit Certificate</h2>
+              <p class="report-subline" id="reportMetaSubline">Session: Idle • Awaiting Audit Execution</p>
+            </div>
+            <div class="report-view-actions">
+              <a id="btnExternalReport" href="#" target="_blank" class="btn-external-pop" style="display: none;">
+                ↗ Open in New Window
+              </a>
+            </div>
+          </div>
+
+          <!-- Finding Cards Container -->
+          <div class="findings-container" id="findingsContainer">
+            <div class="empty-state-card">
+              <div style="font-size: 2rem; margin-bottom: 8px;">🛡️</div>
+              <h3>No Active Audit Results</h3>
+              <p>Paste code on the Code Editor tab and click "RUN AUDIT" on the left to generate the detailed certificate.</p>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <script src="/static/js/app.js?v=2.3"></script>
 </body>
 </html>

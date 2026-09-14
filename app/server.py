@@ -124,6 +124,46 @@ async def stream_review(session_id: str):
     )
 
 
+@app.get("/report/{session_id}", response_class=HTMLResponse)
+async def serve_audit_report(session_id: str):
+    """
+    Serves a standalone, printable, executive audit report in another browser tab.
+    """
+    report_file = os.path.join(STATIC_DIR, "report.html")
+    if os.path.exists(report_file):
+        with open(report_file, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse("<h1>Report Generator Active</h1>")
+
+
+@app.get("/api/v1/review/report/{session_id}")
+async def get_session_report_data(session_id: str):
+    """
+    Returns complete structured audit data for a session to populate standalone report.
+    """
+    context = coordinator._active_sessions.get(session_id)
+    if not context:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    
+    return {
+        "session_id": context.session_id,
+        "repo": context.repo,
+        "commit_sha": context.commit_sha,
+        "author_id": context.author_id,
+        "user_id": context.user_id,
+        "language": getattr(context, "language", "python"),
+        "dlp_status": context.dlp_result.dlp_status,
+        "redacted_count": context.dlp_result.redacted_findings_count,
+        "ast_findings_count": len(context.ast_findings),
+        "ast_findings": context.ast_findings,
+        "findings": context.completed_findings,
+        "final_rating": context.final_rating,
+        "status": context.status,
+        "payload_hash": context.payload_hash,
+        "created_at": context.created_at
+    }
+
+
 # --- 4. Patch Application Endpoint ---
 
 class ApplyPatchRequest(BaseModel):

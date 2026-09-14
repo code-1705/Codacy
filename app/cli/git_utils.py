@@ -27,6 +27,8 @@ def get_git_diff(staged: bool = False, file_path: Optional[str] = None) -> str:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False
         )
         diff_output = proc.stdout.strip()
@@ -43,6 +45,36 @@ def get_git_diff(staged: bool = False, file_path: Optional[str] = None) -> str:
         return ""
 
 
+def split_diff_by_files(diff_text: str) -> list:
+    """
+    Splits a multi-file unified git diff into individual (file_path, diff_content) tuples.
+    Enables isolated per-file review without one file's quarantine halting the whole diff.
+    """
+    if not diff_text or not diff_text.strip():
+        return []
+
+    file_diffs = []
+    current_file = ""
+    current_lines = []
+
+    for line in diff_text.splitlines():
+        if line.startswith("diff --git "):
+            if current_lines:
+                file_diffs.append((current_file or "git-diff", "\n".join(current_lines)))
+                current_lines = []
+            parts = line.split(" ")
+            if len(parts) >= 4 and parts[3].startswith("b/"):
+                current_file = parts[3][2:]
+            else:
+                current_file = "git-diff"
+        current_lines.append(line)
+
+    if current_lines:
+        file_diffs.append((current_file or "git-diff", "\n".join(current_lines)))
+
+    return file_diffs
+
+
 def get_git_repo_metadata() -> dict:
     """Extracts current git commit SHA, author, and branch name."""
     meta = {
@@ -51,11 +83,11 @@ def get_git_repo_metadata() -> dict:
         "author": "developer@fintech.corp"
     }
     try:
-        sha_proc = subprocess.run(["git", "rev-parse", "HEAD"], stdout=subprocess.PIPE, text=True, check=False)
+        sha_proc = subprocess.run(["git", "rev-parse", "HEAD"], stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", check=False)
         if sha_proc.returncode == 0 and sha_proc.stdout.strip():
             meta["commit_sha"] = sha_proc.stdout.strip()
 
-        author_proc = subprocess.run(["git", "config", "user.email"], stdout=subprocess.PIPE, text=True, check=False)
+        author_proc = subprocess.run(["git", "config", "user.email"], stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", check=False)
         if author_proc.returncode == 0 and author_proc.stdout.strip():
             meta["author"] = author_proc.stdout.strip()
 
